@@ -1,14 +1,38 @@
 import setuptools
-from setuptools import Extension
+import os
+import subprocess
+# from setuptools import Extension
+from setuptools.command.develop import develop
+from setuptools.command.install import install
+
+
+class PostDevelopCommand(develop):
+    """Post-installation for development mode."""
+
+    def run(self):
+        # PUT YOUR POST-INSTALL SCRIPT HERE or CALL A FUNCTION
+        develop.run(self)
+
+
+class PostInstallCommand(install):
+    """Post-installation for installation mode."""
+
+    def run(self):
+        filepath = os.path.realpath(__file__)
+        vertical_path = os.path.join(filepath[0], "romspy/interpolation/vertical/")
+        subprocess.run(["gcc", "-Wall", "-Wextra", "-fPIC", "-fopenmp", "-shared", vertical_path + "linear.c", "-o",
+                        vertical_path + "linear.so"])
+        install.run(self)
+
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-ext = Extension(
-    'romspy/interpolation/vertical/linear',
-    sources=['romspy/interpolation/vertical/linear.c'],
-    extra_compile_args=['-fopenmp'],
-    extra_link_args=['-lgomp'])
+# ext = Extension(
+#     'romspy/interpolation/vertical/linear',
+#     sources=['romspy/interpolation/vertical/linear.c'],
+#     extra_compile_args=['-fopenmp'],
+#     extra_link_args=['-lgomp'])
 
 setuptools.setup(
     name="romspy",
@@ -20,7 +44,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://https://github.com/Saixos/romspy",
     packages=setuptools.find_packages(include=["romspy", "romspy.*"]),
-    ext_modules=[ext],
+    package_data={'': ['romspy/interpolation/vertical/*']},
     install_requires=[
         'numpy>=1.17.1',
         'xarray>=0.12.3',
@@ -37,6 +61,10 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Typing :: Typed"
     ],
+    cmdclass={
+        'develop': PostDevelopCommand,
+        'install': PostInstallCommand,
+    },
     keywords='preprocessing ROMS roms Regional Ocean Modelling System cdo Climate Data Operators netcdf4 ',
     python_requires='>=3.6',
 )
