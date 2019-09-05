@@ -10,7 +10,7 @@ class Settings:
         self.flags = {} if flags is None else flags
         self.preprocessor = None
 
-    def make_adjustments(self, file, out_variables, group_files, all_vars):
+    def make_adjustments(self, file: str, out_variables: set, group_files: str, all_vars: set):  # THIS IS BUGGED
         assert self.preprocessor is not None
         if self.preprocessor.verbose:
             print("Making adjustments to file contents as per settings.")
@@ -21,7 +21,7 @@ class Settings:
                     if len(contents) == len(adjustment['in_var_names']):
                         # If the output isn't already pre-calculated and all the inputs are in the same file
                         adjustment['func'](self.preprocessor, file, group_files, self.flags)
-                    else:
+                    else:  # BUGGED
                         print("ERROR: The variables needed to calculate " + str(adjustment['out_var_names']) +
                               " were not all present in the same file! Variables needed: " +
                               str(adjustment['in_var_names']))
@@ -31,7 +31,7 @@ class Settings:
             print("Checking if all adjustments have any necessary flags")
         has_flags = True
         for adjustment in self.adjustments:
-            flags = adjustment.get(flags, None)
+            flags = adjustment.get('flags', None)
             if isinstance(flags, list):
                 for flag in flags:
                     if flag not in self.flags:

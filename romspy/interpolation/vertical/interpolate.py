@@ -66,7 +66,7 @@ def gen_vert_weight(gen_fun, weight_extra_len: int, weight_dir: str, file: str, 
         z_slice = np.prod(z_levels.shape[1:], dtype=np.ulonglong)
         z_len = np.ulonglong(z_levels.shape[0])
         # Get weight array which will store results
-        weight_arr = np.require(np.empty(int(z_levels.size * weight_extra_len), dtype=np.float32),
+        weight_arr = np.require(np.empty(tuple(z_levels.shape + (weight_extra_len,)), dtype=np.float32),
                                 requirements=['C', "W", "O", "A"])  # 2 here is [index, index percentage] see c code
 
         # Get depth and depth length
@@ -82,7 +82,7 @@ def gen_vert_weight(gen_fun, weight_extra_len: int, weight_dir: str, file: str, 
         prefix = "vertical_" + "_".join(variables) + "_"
         path = os.path.split(file)[1]
         weight_file_name = os.path.join(weight_dir, prefix + path + ".npy")
-
+        print(weight_arr)
         # Save weights
         np.save(weight_file_name, weight_arr)
     return weight_file_name

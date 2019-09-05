@@ -1,7 +1,7 @@
-from romspy.settings import clim
+from romspy import PreProcessor, clim_settings
 
-target = '/net/kryo/work/munnich/roms/inputs/gridfiles/pactcs30_grd.nc'
-out = 'bulk/pactcs30_test_clim.nc'
+target = '/home/nicomuen/pactcs30_grd.nc'
+out = '/home/nicomuen/work/pactcs30_test_clim.nc'
 sources = [
     {
         'variables': [
@@ -13,5 +13,8 @@ sources = [
     }
 ]
 
-clim_obj = clim.Climatology(target, out, sources, verbose=True)
-clim_obj.make()
+processor = PreProcessor(target, out, sources, clim_settings, keep_weights=True, keep_z_clim=True, verbose=True)
+processor.interpolator.add_shift_pair("u", "v")
+clim_settings.flags['obc'] = [1, 0, 1, 1]
+
+processor.make()

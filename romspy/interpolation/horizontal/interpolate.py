@@ -8,7 +8,7 @@ License: GNU GPL2+
 """
 
 
-def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: list, all_files: str, options: str,
+def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: dict, all_files: str, options: str,
                     outfile: str = None, verbose=False) -> str:
     """
     Extract a variable from file and interpolate according to weight
@@ -23,7 +23,7 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: li
     :param verbose: whether to print information
     """
     if verbose:
-        print('Horizontally interpolating ' + " ".join(variables) + " from " + file)
+        print('Horizontally interpolating ' + " ".join([x['out'] for x in variables]) + " from " + file)
 
     if file[-3:] == '.nc' or file[-4:] == '.cdf':
         return __interpolate_nc(cdo, file, weight, target_grid, variables, all_files, outfile, options, verbose)
@@ -35,7 +35,7 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: li
     # Room for additional/alternative conversion functions if they appear necessary
 
 
-def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, all_files: str, outfile: str,
+def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: dict, all_files: str, outfile: str,
                      options: str, verbose: bool) -> str:
     """
 
@@ -79,8 +79,8 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
             v.setncattr('h_interp_mtd', method)
         for var in renames:
             if verbose:
-                print('Renaming ' + var['old'] + ' to ' + var['new'])
-            nc_file.renameVariable(oldname=var['old'], newname=var['new'])
+                print('Renaming ' + var['in'] + ' to ' + var['out'])
+            nc_file.renameVariable(oldname=var['in'], newname=var['out'])
     if verbose:
         print('Sources and renaming complete!')
     return outfile
@@ -107,7 +107,7 @@ def calculate_weights(cdo, target_dir: str, sources: list, scrip_grid: str, opti
         'laf': cdo.genlaf
     }
     if verbose:
-        print("Calculating weights")
+        print("Calculating weights. Target directory: " + target_dir)
     for group, index in zip(sources, count()):
         mtd_name = group['interpolation_method']
         weight_name = os.path.join(target_dir, mtd_name + '_weight_' + str(index) + ".nc")

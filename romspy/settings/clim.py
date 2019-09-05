@@ -1,6 +1,5 @@
 from romspy.interpolation.vertical.levels import z_levels, sigma_stretch_cs, sigma_stretch_sc
 from romspy.interpolation.shift_grid import shift
-from romspy.preprocessing import PreProcessor
 import netCDF4
 import numpy as np
 
@@ -10,7 +9,7 @@ License: GNU GPL2+
 """
 
 
-def stress_bar_adjustment(preprocessor: PreProcessor, file: str, group_files: str, flags: dict):
+def stress_bar_adjustment(preprocessor, file: str, group_files: str, flags: dict):
     if preprocessor.verbose:
         print("Getting ubar and vbar")
     h = preprocessor.h

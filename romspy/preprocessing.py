@@ -51,7 +51,6 @@ class PreProcessor:
         # cdo
         self.cdo = cdo.Cdo()
         test_cdo(self.cdo)
-
         # Sources
         verify_sources(sources, verbose)
         self.sources = sources
@@ -117,7 +116,7 @@ class PreProcessor:
             return
         # dict of all variables produced
         all_vars = {var['out'] for sublist in [x['variables'] for x in self.sources] for var in sublist}
-
+        group_index = 0
         # For each group of variables
         for group, group_index in zip(self.sources, count()):
             group_files = ','.join(group['files'])
@@ -132,7 +131,7 @@ class PreProcessor:
                 # Interpolate everything necessary
                 self.interpolator.interpolate(in_file, out_file, weight, variables, group_files)
                 # Make any adjustments to variables necessary
-                self.var_settings.make_adjustments(out_file, out_variables, all_vars, group_files)
+                self.var_settings.make_adjustments(out_file, out_variables, group_files, all_vars)
                 # Rename time to starting with an underscore if necessary
                 if self.time_underscored:
                     self.__rename_time(out_file, group_index)

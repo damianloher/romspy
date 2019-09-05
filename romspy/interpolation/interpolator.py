@@ -1,6 +1,8 @@
 from .shift_grid import shift_rotate_grid
 from .horizontal import calculate_weights, cdo_interpolate
-from .vertical import gen_vert_bil, interp_bil, bil_weight_extra_len, vert_interpolate
+from .vertical import vert_interpolate
+from romspy.interpolation.vertical.load_c_libs import bil_weight_extra_len
+from romspy.interpolation.vertical import gen_vert_bil, interp_bil
 import os
 
 """
@@ -42,7 +44,7 @@ class Interpolator:
         self.keep_z_clim = keep_z_clim
         self.verbose = verbose
         self.weight_dir = os.path.join(target_dir, "weights")
-        if os.path.exists(os.path.join(target_dir, "weights")):
+        if not os.path.exists(os.path.join(target_dir, "weights")):
             os.mkdir(os.path.join(target_dir, "weights"))
         self.vertical_weights = {} if vertical_weights is None else vertical_weights
         self.shift_pairs = ShiftPairCollection()
@@ -172,3 +174,4 @@ class ShiftPairCollection:
                 if var not in zip_pairs[0] and var not in zip_pairs[1]:
                     raise ValueError(
                         "ERROR: Variable flagged for shifting does not have its pair present! Variable: " + var)
+        return pairs

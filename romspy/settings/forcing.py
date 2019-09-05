@@ -58,12 +58,11 @@ def swflux_adjustment(preprocessor, file: str, group_files: str, flags: dict):
     if preprocessor.verbose:
         print("Adjusting for swflux")
     preprocessor.cdo.setattribute(
-        "swflux@long_name='surface fresh water flux',swflux@unit='cm day-1',swflux@files='"
-        + group_files + "'",
+        "swflux@long_name='surface fresh water flux',swflux@unit='cm day-1',swflux@files='" + group_files + "'",
         input="-delname,evap" + (
-            ",precip" if not flags["include_precip"] else "") + " -aexpr,'swflux=precip+evap' " + file,
-        options=preprocessor.options,
-        output=file)
+            # 'flags["include_precip"]' instead of 'flags.get("include_precip", False)' makes precip flag mandatory
+            ",precip" if not flags.get("include_precip", False) else "") + " -aexpr,'swflux=precip+evap' " + file,
+        options=preprocessor.options, output=file)
 
     if preprocessor.verbose:
         print("swflux has been added")
