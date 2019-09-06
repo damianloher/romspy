@@ -7,10 +7,7 @@ Author: Nicolas Munnich
 License: GNU GPL2+
 """
 
-filepath = os.path.realpath(__file__)
-libpath = os.path.join(os.path.split(filepath)[0], "linear.so")
-
-lib = ctypes.cdll.LoadLibrary(libpath)
+lib = ctypes.cdll.LoadLibrary(os.path.join(os.path.dirname(__file__), "linear.so"))
 gen_vert_bil = lib.create_weights
 interp_bil = lib.apply_weights
 bil_weight_extra_len = 3
