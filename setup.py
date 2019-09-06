@@ -37,7 +37,7 @@ ext = Extension(
 
 setuptools.setup(
     name="romspy",
-    version="1.0.a7",
+    version="1.0.a10",
     author="Nicolas Munnich",
     author_email="nmdm20@bath.ac.uk",
     description="Preprocessing files for use in ROMS",

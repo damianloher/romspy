@@ -66,10 +66,12 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
                     new_u[t] = u_contents
                     new_v[t] = v_contents
 
+    t_file = cdo.delname(",".join([x for x, y, u, v in variables] + [y for x, y, u, v in variables]), input=in_file,
+                         options=options)
     if out_file is None:
-        out_file = cdo.replace(input=in_file + " " + temp_out_path, options=options)
+        out_file = cdo.merge(input=t_file + " " + temp_out_path, options=options)
     else:
-        cdo.replace(input=in_file + " " + temp_out_path, output=out_file, options=options)
+        cdo.merge(input=t_file + " " + temp_out_path, output=out_file, options=options)
     os.remove(temp_out_path)
     return out_file
 
