@@ -36,7 +36,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="romspy",
-    version="1.0.dev3",
+    version="1.0.dev4",
     author="Nicolas Munnich",
     author_email="nmdm20@bath.ac.uk",
     description="Preprocessing files for use in ROMS",
