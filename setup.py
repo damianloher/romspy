@@ -44,11 +44,10 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://https://github.com/Saixos/romspy",
     packages=setuptools.find_packages(include=["romspy", "romspy.*"]),
-    package_data={'': ['romspy/interpolation/vertical/*']},
     install_requires=[
         'numpy>=1.17.1',
         'xarray>=0.12.3',
-        'cdo>=1.5.3',
+        'cdo>=1.4.3',
         'netCDF4>=1.5.1.2',
     ],
     classifiers=[
