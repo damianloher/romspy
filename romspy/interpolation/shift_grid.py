@@ -8,7 +8,7 @@ License: GNU GPL2+
 """
 
 
-def shift_rotate_grid(cdo, in_file, target_grid, variables, options, verbose=False, out_file=None) -> str:
+def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False, out_file=None) -> str:
     """
     Shifts and rotates variable pairs
     :param cdo:
@@ -20,6 +20,7 @@ def shift_rotate_grid(cdo, in_file, target_grid, variables, options, verbose=Fal
     :param out_file:
     :return:
     """
+
     split = os.path.split(in_file)
     temp_out_path = os.path.join(split[0], "temp_" + split[1])
 
@@ -33,10 +34,10 @@ def shift_rotate_grid(cdo, in_file, target_grid, variables, options, verbose=Fal
         with netCDF4.Dataset(temp_out_path, mode="w") as _out:
             _out.createDimension("xi_u", len(_in.dimensions["xi_rho"]) - 1)
             _out.createDimension("eta_v", len(_in.dimensions["eta_rho"]) - 1)
-            for u, v in variables:
+            for x, y, u, v in variables:
                 if verbose:
-                    print("Turning and shifting variable pair: (" + u + "," + v + ")")
-                u_obj, v_obj = _in.variables[u], _in.variables[v]
+                    print("Making vectors: (" + u + "," + v + ")")
+                u_obj, v_obj = _in.variables[x], _in.variables[y]
                 dims = list(u.dimensions)
                 u_dims, v_dims = dims.copy(), dims
                 u_dims[-1] = "xi_u"

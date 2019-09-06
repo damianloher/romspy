@@ -9,7 +9,7 @@ License: GNU GPL2+
 
 
 def vert_interpolate(cdo, gen_fun, apply_fun, weight_extra_len: int, file: str, outfile: str, weight_dir: str,
-                     variables: list, z_levels: np.ndarray, vertical_weights: dict, options: str,
+                     variables: list, z_levels: np.ndarray, source: dict, options: str,
                      verbose: bool = False) -> str:
     """
     Interpolate a number of 4D variables in a file on the third to last axis.
@@ -30,15 +30,12 @@ def vert_interpolate(cdo, gen_fun, apply_fun, weight_extra_len: int, file: str, 
     :return: File with variables vertically interpolated
     """
 
-    with netCDF4.Dataset(file, mode="r") as my_file:
-        depth = tuple(my_file.variables['depth'][:])
-
-    weight_file = vertical_weights.get(depth, None)
+    weight_file = source.get('vertical_weight', None)
 
     # Produce weight if it does not already exist or replace weight if ssh is found
     if weight_file is None:
         weight_file = gen_vert_weight(gen_fun, weight_extra_len, weight_dir, file, variables, z_levels, verbose)
-        vertical_weights[depth] = weight_file
+        source['vertical_weight'] = weight_file
 
     # Interpolate with the corresponding weight
     return apply_vert_weights(cdo, apply_fun, weight_file, file, outfile, variables, options, verbose)
@@ -47,7 +44,7 @@ def vert_interpolate(cdo, gen_fun, apply_fun, weight_extra_len: int, file: str, 
 def gen_vert_weight(gen_fun, weight_extra_len: int, weight_dir: str, file: str, variables: list, z_levels: np.ndarray,
                     verbose: bool = False) -> str:
     """
-    Generate weights for vertical interpolation routines.
+   Generate weights for vertical interpolation routines.
     :param gen_fun: Vertical interpolation routine written in C. Must have same arguments as create_weights
                     found in romspy/interpolation/vertical/linear
     :param weight_extra_len: length of the extra dimension added to weights

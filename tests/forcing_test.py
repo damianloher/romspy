@@ -1,7 +1,7 @@
-from romspy import PreProcessor, forcing_settings
+from romspy import PreProcessor, forcing_adjustments
 
-target = '/home/nicomuen/pactcs30_grd.nc'
-out = '/home/nicomuen/work/pactcs30_test_con_frc.nc'
+target = 'pactcs30_grd.nc'
+out = 'test_pactcs30_frc.nc'
 sources = [
     {
         'variables': [

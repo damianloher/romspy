@@ -1,4 +1,4 @@
 from .preprocessing import PreProcessor
-from .settings import forcing_settings, clim_settings
+from .adjustments import forcing_adjustments, clim_adjustments
 
 name = "romspy"

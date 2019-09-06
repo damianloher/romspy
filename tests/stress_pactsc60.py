@@ -1,4 +1,4 @@
-from romspy.settings import forcing
+from romspy.adjustments import forcing
 
 target = '/net/kryo/work/munnich/roms/inputs/gridfiles/pactcs30_grd.nc'
 # scrip = 'ustc90_grd_scripm.nc'

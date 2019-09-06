@@ -104,7 +104,7 @@ def z_levels(h: np.ndarray, sc: np.ndarray, cs: np.ndarray, hc: int, zeta: np.nd
 
 
 def get_z_levels(h: np.ndarray, sc: np.ndarray, cs: np.ndarray, hc: int, zeta: np.ndarray = None, sigma_type=3,
-                 verbose=False) -> dict:
+                 verbose=False) -> tuple:
     """
     Compute the depth of each point in a 3D grid
     :param h: 2D array of seafloor height at each point
@@ -116,8 +116,8 @@ def get_z_levels(h: np.ndarray, sc: np.ndarray, cs: np.ndarray, hc: int, zeta: n
     :param verbose:
     :return: depth of points as 3D array shaped sc * h.shape[0] * h.shape[1]
     """
-    my_z_levels = {'rho-rho': z_levels(h, sc, cs, hc, zeta, sigma_type, verbose),
-                   'rho-u': z_levels(shift(h, 1), sc, cs, hc, shift(zeta, 1), sigma_type, verbose),
-                   'v-rho': z_levels(shift(h, 2), sc, cs, hc, shift(zeta, 2), sigma_type, verbose)}
+    my_z_levels = (z_levels(h, sc, cs, hc, zeta, sigma_type, verbose),
+                   z_levels(shift(h, 1), sc, cs, hc, shift(zeta, 1), sigma_type, verbose),
+                   z_levels(shift(h, 2), sc, cs, hc, shift(zeta, 2), sigma_type, verbose))
 
     return my_z_levels

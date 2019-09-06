@@ -8,7 +8,7 @@ License: GNU GPL2+
 """
 
 
-def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: dict, all_files: str, options: str,
+def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: list, all_files: str, options: str,
                     outfile: str = None, verbose=False) -> str:
     """
     Extract a variable from file and interpolate according to weight
@@ -35,7 +35,7 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: di
     # Room for additional/alternative conversion functions if they appear necessary
 
 
-def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: dict, all_files: str, outfile: str,
+def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, all_files: str, outfile: str,
                      options: str, verbose: bool) -> str:
     """
 
@@ -52,7 +52,7 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: dict, 
     :return: output filename
     """
     varlist = [x['in'] for x in variables]
-    renames = [x for x in variables if x['in'] != x.get('out')]
+    renames = [x for x in variables if x['in'] != x['out']]
     # -selname select the variable by name from file first
     # remap weight is the argument, no need to specify method
     # -f file type
