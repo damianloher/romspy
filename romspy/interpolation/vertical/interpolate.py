@@ -135,7 +135,6 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
         cdo.delname(",".join(["tmp_" + var for var in variables]), input=temp_merge, output=outfile, options=options)
     else:
         outfile = cdo.delname(",".join(["tmp_" + var for var in variables]), input=temp_merge, options=options)
-    cdo.copy(input=temp_out_path, output="/net/cedrus/work/munnich/find_vert_bug.nc", options=options)
     os.remove(temp_out_path)
     # dest_dir = os.path.split(outfile)
     # temp_file = os.path.join(dest_dir[0], "temp_file.nc")
