@@ -70,8 +70,12 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
                 _in.renameVariable(v, "tmp_" + v)
 
     t_name = cdo.merge(input=in_file + " " + temp_out_path, options=options)
-    cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
-                options=options)
+    if out_file is not None:
+        cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
+                    options=options)
+    else:
+        out_file = cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name,
+                               options=options)
     os.remove(temp_out_path)
     return out_file
 

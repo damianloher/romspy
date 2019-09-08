@@ -93,7 +93,6 @@ class Interpolator:
         if shifts:
             if self.verbose:
                 print("Shifting and rotating variables: " + str(shift_variables))
-                print(outfile)
             outfile = adjust_vectors(self.cdo, outfile, self.target_grid, shift_variables, self.options,
                                      self.verbose,
                                      outfile_name if not vertical else (z_clim_name if self.keep_z_clim else None))
@@ -104,17 +103,16 @@ class Interpolator:
                 print("Interpolating vertically: " + str(vertical_variables))
             if len(vertical_variables) > 0:
                 outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                           outfile_name, self.weight_dir, vertical_variables, self.z_levels[0],
-                                           group, self.options, self.verbose)
+                                           (outfile_name if not shifts else None), self.weight_dir, vertical_variables,
+                                           self.z_levels[0], group, self.options, self.verbose)
             if shifts:
-                if len(shift_vert_u) > 0:
-                    outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                               outfile_name, self.weight_dir, shift_vert_u, self.z_levels[1],
-                                               group, self.options, self.verbose)
-                if len(shift_vert_v) > 0:
-                    outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                               outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
-                                               group, self.options, self.verbose)
+                # noinspection PyTypeChecker
+                outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
+                                           None, self.weight_dir, shift_vert_u, self.z_levels[1],
+                                           group, self.options, self.verbose)
+                outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
+                                           outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
+                                           group, self.options, self.verbose)
         self.cdo.cleanTempDir()
         return outfile
 
