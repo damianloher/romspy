@@ -25,11 +25,11 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
     temp_out_path = os.path.join(split[0], "temp_" + split[1])
     with netCDF4.Dataset(target_grid, mode='r') as target:
         angle = target.variables["angle"]
-        if angle.units != "radians":
+        if angle.units == "degrees":
             angle = np.deg2rad(angle[:])
         else:
             angle = angle[:]
-    with netCDF4.Dataset(in_file, mode='r') as _in:
+    with netCDF4.Dataset(in_file, mode='r+') as _in:
         with netCDF4.Dataset(temp_out_path, mode="w") as _out:
             _out.createDimension("xi_u", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-1]]) - 1)
             _out.createDimension("eta_v", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-2]]) - 1)
@@ -66,19 +66,12 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
 
                     new_u[t] = u_contents
                     new_v[t] = v_contents
-    try:
-        t_name = cdo.delname(",".join([item for sublist in variables for item in sublist]), input=in_file,
-                             options=options)
-        if out_file is None:
-            out_file = cdo.merge(input=t_name + " " + temp_out_path, options=options)
-        else:
-            cdo.merge(input=t_name + " " + temp_out_path, output=out_file, options=options)
-    except Exception:
-        if out_file is None:
-            out_file = cdo.copy(input=temp_out_path, options=options)
-        else:
-            # TODO: Change this to rename temp_out_path to out_file and move os.remove
-            cdo.copy(input=temp_out_path, output=out_file, options=options)
+                _in.renameVariable(u, "tmp_" + u)
+                _in.renameVariable(v, "tmp_" + v)
+
+    t_name = cdo.merge(input=in_file + " " + temp_out_path, options=options)
+    cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
+                options=options)
     os.remove(temp_out_path)
     return out_file
 
