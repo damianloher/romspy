@@ -9,8 +9,9 @@ License: GNU GPL2+
 """
 
 
-def uv_bar_adjustment(file: str, group_files: str, target_grid, verbose, h, layers, theta_s, theta_b, sigma_type, hc, zeta, obc,
-                          **kwargs):
+def uv_bar_adjustment(file: str, group_files: str, target_grid, verbose, h, layers, theta_s, theta_b, sigma_type, hc,
+                      zeta, obc,
+                      **kwargs):
     if verbose:
         print("Getting ubar and vbar")
     h = h
@@ -47,13 +48,13 @@ def uv_bar_adjustment(file: str, group_files: str, target_grid, verbose, h, laye
             pn = grd.variables['pn'][:]
             pm = grd.variables['pm'][:]
         for t in range(time_len):
-            ubar_vals = sum(u[t] * delta_z_levs_u)
-            vbar_vals = sum(v[t] * delta_z_levs_v)
+            ubar_vals = np.sum(np.multiply(u[t], delta_z_levs_u), 0)
+            vbar_vals = np.sum(np.multiply(v[t], delta_z_levs_v), 0)
             ubar_vals, vbar_vals = get_obcvolcons(ubar_vals, vbar_vals, pm, pn, rmask, obc, verbose)
             ubar_vals *= delta_z_levs_u_inv
             vbar_vals *= delta_z_levs_v_inv
-            ubar[t] = ubar_vals
-            vbar[t] = vbar_vals
+            ubar[t] = np.where(u[t] > -9.9e32, ubar_vals, u[t])
+            vbar[t] = np.where(v[t] > -9.9e32, vbar_vals, v[t])
 
 
 def get_obcvolcons(ubar, vbar, pm, pn, rmask, obc, verbose):

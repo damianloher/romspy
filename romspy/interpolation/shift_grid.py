@@ -34,10 +34,13 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
             _out.createDimension("xi_u", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-1]]) - 1)
             _out.createDimension("eta_v", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-2]]) - 1)
             for dim in _in.variables[variables[0][0]].dimensions:
-                _out.createDimension(dim, len(_in.dimensions[dim]))
-            if "depth" in _in.variables[variables[0][0]].dimensions:
-                d_obj = _out.createVariable("depth", 'f', len(_out.dimensions["depth"]))
-                d_obj[:] = _out.variables["depth"][:]
+                dim_len = len(_in.dimensions[dim])
+                _out.createDimension(dim, dim_len)
+                if dim == "depth":
+                    d_obj = _out.createVariable("depth", 'd', ("depth",))
+                    d_obj[:] = _in.variables["depth"][:]
+                    d_obj.setncattr("units", "meters")
+                    d_obj.setncattr("positive", "down")
             for u, v in variables:
                 if verbose:
                     print("Making vectors: (" + u + "," + v + ")")
@@ -73,7 +76,6 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
                 _in.renameVariable(v, "tmp_" + v)
 
     t_name = cdo.merge(input=in_file + " " + temp_out_path, options=options)
-    cdo.copy(input=t_name, output="/net/cedrus/work/munnich/find_vert_bug.nc", options=options)
     if out_file is not None:
         cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
                     options=options)
