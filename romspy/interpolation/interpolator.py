@@ -66,7 +66,7 @@ class Interpolator:
         if shifts:
             shift_vert_u = self.shift_pairs.get_us(vertical_variables)
             shift_vert_v = self.shift_pairs.get_vs(vertical_variables)
-            vertical_variables = list(set(vertical_variables) - (set(shift_vert_u) | set(shift_vert_v)))
+            vertical_variables = [x for x in vertical_variables if x not in shift_vert_u and x not in shift_vert_v]
         if self.verbose:
             print("All Variables: " + str(variables))
             if shifts:
@@ -109,12 +109,12 @@ class Interpolator:
             if shifts:
                 if len(shift_vert_u) > 0:
                     outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                            outfile_name, self.weight_dir, shift_vert_u, self.z_levels[1],
-                                            group, self.options, self.verbose)
+                                               outfile_name, self.weight_dir, shift_vert_u, self.z_levels[1],
+                                               group, self.options, self.verbose)
                 if len(shift_vert_v) > 0:
                     outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                            outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
-                                            group, self.options, self.verbose)
+                                               outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
+                                               group, self.options, self.verbose)
         self.cdo.cleanTempDir()
         return outfile
 
@@ -175,7 +175,9 @@ class ShiftPairCollection:
         return pairs
 
     def get_us(self, variables: list):
-        return list(set(list(zip(*self.shifts))[0]) | set(variables))
+        us = [x[0] for x in self.shifts]
+        return [x for x in us if x in variables]
 
     def get_vs(self, variables: list):
-        return list(set(list(zip(*self.shifts))[1]) | set(variables))
+        vs = [x[1] for x in self.shifts]
+        return [x for x in vs if x in variables]
