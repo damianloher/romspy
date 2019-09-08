@@ -66,13 +66,13 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
 
     method = os.path.split(weight)[1].split("_")[0]
     with netCDF4.Dataset(outfile, mode='r+') as nc_file:
-        dims = nc_file.variables[varlist[0]].dimensions
-        if dims[-1] != "xi_rho":
-            nc_file.renameDimension(dims[-1], "xi_rho")
-        if dims[-2] != "eta_rho":
-            nc_file.renameDimension(dims[-2], "eta_rho")
-        if "time" not in dims[-3] and dims[-3] != "depth":
-            nc_file.renameDimension(dims[-3], "depth")
+        # dims = nc_file.variables[varlist[0]].dimensions
+        # if dims[-1] != "xi_rho":
+        #     nc_file.renameDimension(dims[-1], "xi_rho")
+        # if dims[-2] != "eta_rho":
+        #     nc_file.renameDimension(dims[-2], "eta_rho")
+        # if "time" not in dims[-3] and dims[-3] != "depth":
+        #     nc_file.renameDimension(dims[-3], "depth")
         for name in varlist:
             v: netCDF4.Variable = nc_file.variables[name]
             v.setncattr('files', all_files)

@@ -51,7 +51,8 @@ class PreProcessor:
 
         # Vertical interpolation information
         # Replace anything not passed in with default values
-        if has_vertical(self.sources):
+        self.has_vertical = has_vertical(self.sources)
+        if self.has_vertical:
             self.theta_s, self.theta_b, self.layers, self.hc, self.tcline, self.sigma_type = (
                 kwargs.get('theta_s', 7.0), kwargs.get('theta_b', 0.0),
                 kwargs.get("layers", 32), kwargs.get("hc", 150),
@@ -88,7 +89,7 @@ class PreProcessor:
 
     @property
     def adjustments(self):
-        return self.adjustments
+        return self._adjustments
 
     @adjustments.setter
     def adjustments(self, value: list):
@@ -98,17 +99,21 @@ class PreProcessor:
         for adj in value:
             if not isinstance(adj, dict):
                 print("ERROR: Your adjustments are in an incorrect format. Adjustments must be a list of dictionaries!")
+                print(adj)
                 return
-            if not isinstance(adj.get('in_var_names'), list):
+            if not isinstance(adj.get('in_var_names'), set):
                 print("ERROR: An adjustment has an incorrect 'in_var_name' key. "
-                      "All dicts must have the key 'in_var_names' pointing to a list of input variable strings")
+                      "All dicts must have the key 'in_var_names' pointing to a set of input variable strings")
+                print(adj)
                 return
-            if not isinstance(adj.get('out_var_names'), list):
+            if not isinstance(adj.get('out_var_names'), set):
                 print("ERROR: An adjustment has an incorrect 'out_var_name' key. "
-                      "All dicts must have the key 'out_var_names' pointing to a list of output variable strings")
+                      "All dicts must have the key 'out_var_names' pointing to a set of output variable strings")
+                print(adj)
                 return
             if adj.get('func') is None:
                 print("ERROR: All dicts must have the key 'func' pointing to a function!")
+                print(adj)
                 return
         self._adjustments = value
 
@@ -118,7 +123,9 @@ class PreProcessor:
             return
 
         with Interpolator(self.cdo, os.path.split(self.outfile)[0], self.sources, self.target_grid,
-                          self.scrip_grid, (self.z_level_rho, self.z_level_u, self.z_level_v), self.shift_pairs,
+                          self.scrip_grid,
+                          (self.z_level_rho, self.z_level_u, self.z_level_v) if self.has_vertical else None,
+                          self.shift_pairs,
                           self.options, self.keep_weights, self.keep_z_clim, self.verbose) as interp:
             # dict of all variables produced
             all_vars = {var['out'] for sublist in [x['variables'] for x in self.sources] for var in sublist}
@@ -176,13 +183,15 @@ class PreProcessor:
             print("Making adjustments to file contents as per adjustments.")
         for adjustment in self.adjustments:
             # If a variable in out_var_names is not preprovided or it doesn't produce variables
-            if (len(adjustment['out_var_names'] & all_vars) > 0) or (len(adjustment['out_var_names']) == 0):
-                contents = adjustment['in_var_names'] & out_variables
+            if len(adjustment['out_var_names'] - all_vars) > 0 or len(adjustment['out_var_names']) == 0:
                 # If the file has all the necessary inputs
-                if len(contents) == len(adjustment['in_var_names']):
+                if len(adjustment['in_var_names'] & out_variables) == len(adjustment['in_var_names']):
                     # If the output isn't already pre-calculated and all the inputs are in the same file
                     try:
-                        adjustment['func'](file, group_files=group_files, **vars(self))
+                        if self.verbose:
+                            print("Calling " + str(adjustment))
+                        adjustment['func'](file, group_files=group_files, options=self.options,
+                                           adjustments=self.adjustments, **vars(self))
                     except TypeError as missingflag:
                         print("A flag necessary to run an adjustment was missing, so the adjustment was skipped.")
                         print("Culprit(s): " + str(missingflag))
@@ -191,7 +200,7 @@ class PreProcessor:
                         print("If the number of culprit arguments seems extremely long,"
                               " maybe you forgot to add **kwargs to your function?")
                         print("If you still wish to perform the adjustment, then you may call the adjustment manually.")
-                elif len(contents) > 0:
+                elif len(adjustment['in_var_names'] & out_variables) >= 1:
                     print("ERROR: The variables needed to calculate " + str(adjustment['out_var_names']) +
                           " were not all present in the same file! Variables needed: " +
                           str(adjustment['in_var_names']))
@@ -203,5 +212,5 @@ class PreProcessor:
             zeta = np.array(zetafile.variables[zeta_source['name']][0])
         return zeta
 
-    def mark_as_vectors(self, vector_x_name, vector_y_name, vector_u_name, vector_v_name):
-        self.shift_pairs.add_shift_pair(vector_x_name, vector_y_name, vector_u_name, vector_v_name)
+    def mark_as_vectors(self, vector_u_name, vector_v_name):
+        self.shift_pairs.add_shift_pair(vector_u_name, vector_v_name)

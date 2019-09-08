@@ -79,7 +79,7 @@ def gen_vert_weight(gen_fun, weight_extra_len: int, weight_dir: str, file: str, 
         prefix = "vertical_" + "_".join(variables) + "_"
         path = os.path.split(file)[1]
         weight_file_name = os.path.join(weight_dir, prefix + path + ".npy")
-        print(weight_arr)
+        # print(weight_arr)
         # Save weights
         np.save(weight_file_name, weight_arr)
     return weight_file_name
@@ -95,7 +95,7 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
     split = os.path.split(file)
     temp_out_path = os.path.join(split[0], "temp_vert_" + split[1])
     # Open input file
-    with netCDF4.Dataset(file) as in_file:
+    with netCDF4.Dataset(file, mode = "r+") as in_file:
         # Get the dimension names used in the variables
         dims = in_file.variables[variables[0]].dimensions
         var_dims: list = [x if x != "depth" else "s_rho" for x in dims]
@@ -127,7 +127,13 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
                     new_var[i] = np.require(var_out_arr, dtype=np.float32)
                 if verbose:
                     print("Finished interpolating " + var + " vertically with external C routine.")
+                in_file.renameVariable(var, "tmp_" + var)
     # Merge into dataset
-    cdo.replace(input=file + " " + temp_out_path, output=outfile, options=options)
+    # doesn not work CDO limitations! cdo.replace(input=file + " " + temp_out_path, output=outfile, options=options)
+    temp_merge = cdo.merge(input = file + " " + temp_out_path, options = options)
+    cdo.delname(",".join(["tmp_" + var for var in variables]), input = temp_merge, output = outfile, options = options)
     os.remove(temp_out_path)
+    # dest_dir = os.path.split(outfile)
+    # temp_file = os.path.join(dest_dir[0], "temp_file.nc")
+    # cdo.copy(input=temp_out_path, output = temp_file, options = options)
     return outfile

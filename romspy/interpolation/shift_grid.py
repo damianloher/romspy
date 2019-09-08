@@ -23,7 +23,6 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
 
     split = os.path.split(in_file)
     temp_out_path = os.path.join(split[0], "temp_" + split[1])
-
     with netCDF4.Dataset(target_grid, mode='r') as target:
         angle = target.variables["angle"]
         if angle.units != "radians":
@@ -32,13 +31,15 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
             angle = angle[:]
     with netCDF4.Dataset(in_file, mode='r') as _in:
         with netCDF4.Dataset(temp_out_path, mode="w") as _out:
-            _out.createDimension("xi_u", len(_in.dimensions["xi_rho"]) - 1)
-            _out.createDimension("eta_v", len(_in.dimensions["eta_rho"]) - 1)
-            for x, y, u, v in variables:
+            _out.createDimension("xi_u", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-1]]) - 1)
+            _out.createDimension("eta_v", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-2]]) - 1)
+            for dim in _in.variables[variables[0][0]].dimensions:
+                _out.createDimension(dim, len(_in.dimensions[dim]))
+            for u, v in variables:
                 if verbose:
                     print("Making vectors: (" + u + "," + v + ")")
-                u_obj, v_obj = _in.variables[x], _in.variables[y]
-                dims = list(u.dimensions)
+                u_obj, v_obj = _in.variables[u], _in.variables[v]
+                dims = list(u_obj.dimensions)
                 u_dims, v_dims = dims.copy(), dims
                 u_dims[-1] = "xi_u"
                 v_dims[-2] = "eta_v"
@@ -65,13 +66,19 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=False,
 
                     new_u[t] = u_contents
                     new_v[t] = v_contents
-
-    t_file = cdo.delname(",".join([x for x, y, u, v in variables] + [y for x, y, u, v in variables]), input=in_file,
-                         options=options)
-    if out_file is None:
-        out_file = cdo.merge(input=t_file + " " + temp_out_path, options=options)
-    else:
-        cdo.merge(input=t_file + " " + temp_out_path, output=out_file, options=options)
+    try:
+        t_name = cdo.delname(",".join([item for sublist in variables for item in sublist]), input=in_file,
+                             options=options)
+        if out_file is None:
+            out_file = cdo.merge(input=t_name + " " + temp_out_path, options=options)
+        else:
+            cdo.merge(input=t_name + " " + temp_out_path, output=out_file, options=options)
+    except Exception:
+        if out_file is None:
+            out_file = cdo.copy(input=temp_out_path, options=options)
+        else:
+            # TODO: Change this to rename temp_out_path to out_file and move os.remove
+            cdo.copy(input=temp_out_path, output=out_file, options=options)
     os.remove(temp_out_path)
     return out_file
 

@@ -29,15 +29,15 @@ from setuptools import Extension
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-ext = Extension(
-    'linear',
-    sources=['romspy/interpolation/vertical/linear.c'],
-    language='c',
-    extra_compile_args=['-fopenmp', '-O3'])
+# ext = Extension(
+#     'linear',
+#     sources=['romspy/interpolation/vertical/linear.c'],
+#     language='c',
+#     extra_compile_args=['-fopenmp', '-O3'])
 
 setuptools.setup(
     name="romspy",
-    version="1.0.a10",
+    version="1.0.b24",
     author="Nicolas Munnich",
     author_email="nmdm20@bath.ac.uk",
     description="Preprocessing files for use in ROMS",
@@ -51,7 +51,7 @@ setuptools.setup(
         'cdo>=1.4.3',
         'netCDF4>=1.5.1.2',
     ],
-    ext_modules=[ext],
+    # ext_modules=[ext],
     classifiers=[
         "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",

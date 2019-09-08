@@ -30,7 +30,7 @@ def verify_sources(sources, verbose: bool):
                     for item in ['in', 'out']:
                         assert item in var_dict.keys()
                 except AssertionError:
-                    sys.exit("ERROR: All variables must have 'in' and 'out' values!")
+                    sys.exit("ERROR: All variables must have 'in' and 'out' values! Offending dict: " + str(var_dict))
 
             files = a_dict['files']
             try:
@@ -44,7 +44,7 @@ def verify_sources(sources, verbose: bool):
                     a_dict['files'] = [files]
 
             except AssertionError:
-                sys.exit("ERROR: Not all filepaths are valid!")
+                sys.exit("ERROR: Not all filepaths are valid! Offending file list: " + str(files))
 
             try:
                 assert a_dict['interpolation_method'] is not None

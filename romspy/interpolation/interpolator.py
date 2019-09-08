@@ -57,14 +57,25 @@ class Interpolator:
         :param all_files: list of all files containing the variables in variables
         :return:
         """
-        self.shift_pairs: ShiftPairCollection
+        if self.verbose:
+            print("Vector pairs saved: " + str(self.shift_pairs.shifts))
         shift_variables = self.shift_pairs.get_shifts(variables)
         shifts = len(shift_variables) > 0
         vertical_variables = [x['out'] for x in variables if x.get("vertical") is not None]
         vertical = len(vertical_variables) > 0
-        shift_vert_u = self.shift_pairs.get_us(vertical_variables)
-        shift_vert_v = self.shift_pairs.get_vs(vertical_variables)
-        vertical_variables = list(set(vertical_variables) - (set(shift_vert_u) | set(shift_vert_v)))
+        if shifts:
+            shift_vert_u = self.shift_pairs.get_us(vertical_variables)
+            shift_vert_v = self.shift_pairs.get_vs(vertical_variables)
+            vertical_variables = list(set(vertical_variables) - (set(shift_vert_u) | set(shift_vert_v)))
+        if self.verbose:
+            print("All Variables: " + str(variables))
+            if shifts:
+                print("Vectors: " + str(shift_variables))
+            if vertical:
+                print("Vertical Variables: " + str(vertical_variables))
+                if shifts:
+                    print(shift_vert_u)
+                    print(shift_vert_v)
 
         if self.keep_z_clim:
             file_path_split = os.path.split(file)
@@ -82,6 +93,7 @@ class Interpolator:
         if shifts:
             if self.verbose:
                 print("Shifting and rotating variables: " + str(shift_variables))
+                print(outfile)
             outfile = adjust_vectors(self.cdo, outfile, self.target_grid, shift_variables, self.options,
                                      self.verbose,
                                      outfile_name if not vertical else (z_clim_name if self.keep_z_clim else None))
@@ -94,14 +106,15 @@ class Interpolator:
                 outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
                                            outfile_name, self.weight_dir, vertical_variables, self.z_levels[0],
                                            group, self.options, self.verbose)
-            if len(shift_vert_u) > 0:
-                outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                           outfile_name, self.weight_dir, shift_vert_u, self.z_levels[1],
-                                           group, self.options, self.verbose)
-            if len(shift_vert_v) > 0:
-                outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
-                                           outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
-                                           group, self.options, self.verbose)
+            if shifts:
+                if len(shift_vert_u) > 0:
+                    outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
+                                            outfile_name, self.weight_dir, shift_vert_u, self.z_levels[1],
+                                            group, self.options, self.verbose)
+                if len(shift_vert_v) > 0:
+                    outfile = vert_interpolate(self.cdo, gen_vert_bil, interp_bil, bil_weight_extra_len, outfile,
+                                            outfile_name, self.weight_dir, shift_vert_v, self.z_levels[2],
+                                            group, self.options, self.verbose)
         self.cdo.cleanTempDir()
         return outfile
 
@@ -138,17 +151,17 @@ class Interpolator:
 
 class ShiftPairCollection:
     def __init__(self):
-        self.shifts = {}
+        self.shifts = []
 
     def __contains__(self, item):
-        return item in [item for sublist in self.shifts.keys() for item in sublist]
+        return item in [item for sublist in self.shifts for item in sublist]
 
-    def add_shift_pair(self, x_in: str, y_in: str, u_out: str, v_out: str):
+    def add_shift_pair(self, x_in: str, y_in: str):
         """
         Add a pair to be shifted. Variables cannot be present in more than one pair, so check for this.
         """
         if x_in not in self and y_in not in self:
-            self.shifts[(x_in, y_in)] = (u_out, v_out)
+            self.shifts.append((x_in, y_in))
         else:
             raise ValueError("ERROR: One of these vectors has already been named in another vector! "
                              "The offending pair: (" + x_in + "," + y_in + ")")
@@ -157,12 +170,12 @@ class ShiftPairCollection:
         """
         Get the pairs which are present in variables.
         """
-        pairs = [((x, y), self.shifts.get((x, y))) for x, y in zip(variables, variables) if
-                 self.shifts.get((x, y)) is not None]
+        out = [x['out'] for x in variables]
+        pairs = [(x, y) for x, y in self.shifts if x in out]
         return pairs
 
     def get_us(self, variables: list):
-        return [x[1][0] for x in self.shifts.items() if x[0][0] in variables]
+        return list(set(list(zip(*self.shifts))[0]) | set(variables))
 
     def get_vs(self, variables: list):
-        return [x[1][1] for x in self.shifts.items() if x[0][1] in variables]
+        return list(set(list(zip(*self.shifts))[1]) | set(variables))
