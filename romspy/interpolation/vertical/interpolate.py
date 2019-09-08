@@ -30,12 +30,12 @@ def vert_interpolate(cdo, gen_fun, apply_fun, weight_extra_len: int, file: str, 
     :return: File with variables vertically interpolated
     """
 
-    weight_file = source.get('vertical_weight', None)
+    # weight_file = source.get('vertical_weight', None)
 
     # Produce weight if it does not already exist or replace weight if ssh is found
-    if weight_file is None:
-        weight_file = gen_vert_weight(gen_fun, weight_extra_len, weight_dir, file, variables, z_levels, verbose)
-        source['vertical_weight'] = weight_file
+    # if weight_file is None:
+    weight_file = gen_vert_weight(gen_fun, weight_extra_len, weight_dir, file, variables, z_levels, verbose)
+    # source['vertical_weight'] = weight_file
 
     # Interpolate with the corresponding weight
     return apply_vert_weights(cdo, apply_fun, weight_file, file, outfile, variables, options, verbose)
@@ -95,7 +95,7 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
     split = os.path.split(file)
     temp_out_path = os.path.join(split[0], "temp_vert_" + split[1])
     # Open input file
-    with netCDF4.Dataset(file, mode = "r+") as in_file:
+    with netCDF4.Dataset(file, mode="r+") as in_file:
         # Get the dimension names used in the variables
         dims = in_file.variables[variables[0]].dimensions
         var_dims: list = [x if x != "depth" else "s_rho" for x in dims]
@@ -130,8 +130,11 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
                 in_file.renameVariable(var, "tmp_" + var)
     # Merge into dataset
     # doesn not work CDO limitations! cdo.replace(input=file + " " + temp_out_path, output=outfile, options=options)
-    temp_merge = cdo.merge(input = file + " " + temp_out_path, options = options)
-    cdo.delname(",".join(["tmp_" + var for var in variables]), input = temp_merge, output = outfile, options = options)
+    temp_merge = cdo.merge(input=file + " " + temp_out_path, options=options)
+    if outfile is not None:
+        cdo.delname(",".join(["tmp_" + var for var in variables]), input=temp_merge, output=outfile, options=options)
+    else:
+        outfile = cdo.delname(",".join(["tmp_" + var for var in variables]), input=temp_merge, options=options)
     os.remove(temp_out_path)
     # dest_dir = os.path.split(outfile)
     # temp_file = os.path.join(dest_dir[0], "temp_file.nc")
