@@ -75,10 +75,10 @@ def get_obcvolcons(ubar, vbar, pm, pn, rmask, obc, verbose):
     dx_v = 2 * vmask / (2 * shift(pm, 2))
     udy = ubar * dy_u
     vdx = vbar * dx_v
-    flux = obc[0] * np.sum(vdx[1:, 0]) - obc[1] * np.sum(udy[-1, 1:]) - obc[2] * np.sum(vdx[1:, -1]) + \
-           obc[3] * np.sum(udy[0, 1:])
-    cross = obc[0] * np.sum(dx_v[1:, 0]) + obc[1] * np.sum(dy_u[-1, 1:]) + obc[2] * np.sum(dx_v[1:, -1]) + \
-            obc[3] * np.sum(dy_u[0, 1:])
+    flux = obc[0] * np.nansum(vdx[1:, 0]) - obc[1] * np.nansum(udy[-1, 1:]) - obc[2] * np.nansum(vdx[1:, -1]) + \
+           obc[3] * np.nansum(udy[0, 1:])
+    cross = obc[0] * np.nansum(dx_v[1:, 0]) + obc[1] * np.nansum(dy_u[-1, 1:]) + obc[2] * np.nansum(dx_v[1:, -1]) + \
+            obc[3] * np.nansum(dy_u[0, 1:])
     vcorr = flux / cross
     if verbose:
         print("Flux correction: " + str(vcorr))
