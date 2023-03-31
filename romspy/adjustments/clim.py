@@ -36,9 +36,9 @@ def uv_bar_adjustment(file: str, group_files: str, target_grid, verbose, h, laye
         vbar: netCDF4.Variable = my_file.createVariable('vbar', 'f', vbar_dims)
         u.setncattr('long_name', "u-velocity component")
         v.setncattr('long_name', "v-velocity component")
-        ubar_attrs = {x: u.getncattr(x) for x in u.ncattrs()}
+        ubar_attrs = {x: u.getncattr(x) for x in u.ncattrs() if x != "_FillValue"}
         ubar_attrs['long_name'] = "vertically integrated u-velocity component"
-        vbar_attrs = {x: v.getncattr(x) for x in v.ncattrs()}
+        vbar_attrs = {x: v.getncattr(x) for x in v.ncattrs() if x != "_FillValue"}
         vbar_attrs['long_name'] = "vertically integrated v-velocity component"
         ubar.setncatts(ubar_attrs)
         vbar.setncatts(vbar_attrs)
@@ -53,8 +53,8 @@ def uv_bar_adjustment(file: str, group_files: str, target_grid, verbose, h, laye
             ubar_vals, vbar_vals = get_obcvolcons(ubar_vals, vbar_vals, pm, pn, rmask, obc, verbose)
             ubar_vals *= delta_z_levs_u_inv
             vbar_vals *= delta_z_levs_v_inv
-            ubar[t] = np.where(u[t] > -9.9e32, ubar_vals, u[t])
-            vbar[t] = np.where(v[t] > -9.9e32, vbar_vals, v[t])
+            ubar[t] = np.where(u[t,0] > -9.9e32, ubar_vals, u[t,0])
+            vbar[t] = np.where(v[t,0] > -9.9e32, vbar_vals, v[t,0])
 
 
 def get_obcvolcons(ubar, vbar, pm, pn, rmask, obc, verbose):
@@ -79,7 +79,13 @@ def get_obcvolcons(ubar, vbar, pm, pn, rmask, obc, verbose):
            obc[3] * np.nansum(udy[0, 1:])
     cross = obc[0] * np.nansum(dx_v[1:, 0]) + obc[1] * np.nansum(dy_u[-1, 1:]) + obc[2] * np.nansum(dx_v[1:, -1]) + \
             obc[3] * np.nansum(dy_u[0, 1:])
-    vcorr = flux / cross
+    if abs(flux) < 1e-12:
+        vcorr = 0.0
+    elif abs(cross) < 1e-12:
+        msg = 'inconsistent flux found: flux = {}, cross = {}'.format(flux,cross)
+        raise ValueError(msg)
+    else:
+        vcorr = flux / cross
     if verbose:
         print("Flux correction: " + str(vcorr))
     vbar[:, 0] = obc[0] * (vbar[:, 0] - vcorr)

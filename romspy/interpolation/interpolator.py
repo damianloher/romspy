@@ -19,26 +19,32 @@ class Interpolator:
     """
 
     def __init__(self, cdo, target_dir: str, sources: list, target_grid: str, scrip_grid: str, z_levels: tuple,
-                 shift_pairs, options: str, keep_weights: bool = False, keep_z_clim: bool = False,
-                 verbose: bool = False):
+                 shift_pairs, options: str, in_file: str = '', keep_weights: bool = False,
+                 keep_z_clim: bool = False, use_ROMS_grdfile=False, timavg: int = 0, verbose: bool = False):
         """
         Interpolates files horizontally and vertically, and can rotate+shift variable pairs if necessary
         :param cdo: cdo object
         :param sources: list of sources provided
-        :param target_grid: grid to interpolate onto
+        :param target_grid: ROMS grid file to interpolate onto
         :param scrip_grid: target_grid in SCRIP format
         :param z_levels: 3D array of depths at each point
         :param options: cdo options
+        :param in_file: file to interpolate (only needed if sources has no key 'files')
         :param keep_weights: whether to keep weights after program has finished running
         :param keep_z_clim: whether to save the state before vertical interpolation
+        :param use_ROMS_grdfile use the ROMS grid file instead of a SCRIP conforming version
+        :param timavg number of time records to average over before any interpolations are done
         :param verbose: whether to output runtime information
         """
         self.cdo, self.sources, self.target_grid, self.scrip_grid = cdo, sources, target_grid, scrip_grid
         self.z_levels, self.options, self.keep_weights, self.keep_z_clim = z_levels, options, keep_weights, keep_z_clim
         self.verbose = verbose
+        self.in_file = in_file
+        self.use_ROMS_grdfile = use_ROMS_grdfile
+        self.timavg = timavg
         self.weight_dir = os.path.join(target_dir, "weights")
         if not os.path.exists(os.path.join(target_dir, "weights")):
-            os.mkdir(os.path.join(target_dir, "weights"))
+            os.makedirs(os.path.join(target_dir, "weights"))
         self.shift_pairs = shift_pairs
         self.calculate_horizontal_weights()
 
@@ -61,7 +67,8 @@ class Interpolator:
             print("Vector pairs saved: " + str(self.shift_pairs.shifts))
         shift_variables = self.shift_pairs.get_shifts(variables)
         shifts = len(shift_variables) > 0
-        vertical_variables = [x['out'] for x in variables if x.get("vertical") is not None]
+        #vertical_variables = [x['out'] for x in variables if x.get("vertical") is not None]
+        vertical_variables = [x['out'] for x in variables if x.get("vertical")]
         vertical = len(vertical_variables) > 0
         if shifts:
             shift_vert_u = self.shift_pairs.get_us(vertical_variables)
@@ -77,6 +84,33 @@ class Interpolator:
                     print(shift_vert_u)
                     print(shift_vert_v)
 
+        # Do time averaging, if necessary:
+        if self.timavg > 1:
+            import netCDF4
+            nc = netCDF4.Dataset(file,'r')
+            if 'time' in nc.dimensions:
+                nt = len(nc.dimensions['time'])
+            elif 'T' in nc.dimensions:
+                nt = len(nc.dimensions['T'])
+            else:
+                msg = 'no time dimension found in: ' + file
+                raise ValueError(msg)
+            nc.close()
+            if nt%self.timavg != 0:
+                msg = 'found {} time records in: {}'.format(nt,file)
+                msg += 'averaging over {0} time records not possible ({0} does not divide {1})'.format(self.timavg,nt)
+                raise ValueError(msg)
+            outfiles = []
+            for i in range(int(nt/self.timavg)):
+                t1 = i*self.timavg + 1
+                t2 = t1 + self.timavg - 1
+                input = '-seltimestep,{}/{} {}'.format(t1,t2,file)
+                outfile = self.cdo.timavg(input=input, options=self.options)
+                outfiles.append(outfile)
+            # Merge time averages into one file:
+            outfile = self.cdo.mergetime(input=(' '.join(outfiles)), options=self.options)
+            file = outfile
+
         if self.keep_z_clim:
             file_path_split = os.path.split(file)
             z_clim_name = os.path.join(file_path_split[0], "z_clim_" + file_path_split[1])
@@ -84,7 +118,11 @@ class Interpolator:
         if self.verbose:
             print("Interpolating horizontally")
         # Interpolate the file horizontally
-        outfile = cdo_interpolate(self.cdo, file, group['weight'], self.scrip_grid, variables, all_files, self.options,
+        if self.use_ROMS_grdfile:
+            grdfile = self.target_grid
+        else:
+            grdfile = self.scrip_grid
+        outfile = cdo_interpolate(self.cdo, file, group['weight'], grdfile, variables, all_files, self.options,
                                   outfile_name if not (shifts or vertical) else (
                                       z_clim_name if not shifts and self.keep_z_clim else None),
                                   self.verbose)
@@ -127,7 +165,12 @@ class Interpolator:
         self.shift_pairs.add_shift_pair(u, v)
 
     def calculate_horizontal_weights(self):
-        calculate_weights(self.cdo, self.weight_dir, self.sources, self.scrip_grid, self.options, self.verbose)
+        if self.use_ROMS_grdfile:
+            grdfile = self.target_grid
+        else:
+            grdfile = self.scrip_grid
+        calculate_weights(self.cdo, self.weight_dir, self.sources, grdfile, self.options,
+                          self.verbose, in_file=self.in_file)
 
     def clear_weights(self):
         """

@@ -25,13 +25,17 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: li
     if verbose:
         print('Horizontally interpolating ' + " ".join([x['out'] for x in variables]) + " from " + file)
 
-    if file[-3:] == '.nc' or file[-4:] == '.cdf':
+    import netCDF4
+    try:
+        nc = netCDF4.Dataset(file,'r')
+        nc.close()
         return __interpolate_nc(cdo, file, weight, target_grid, variables, all_files, outfile, options, verbose)
-    else:
-        extension = "." + file[::-1].split(".")[0][::-1]  # get file extension
-        raise ValueError(extension + " source files are currently not supported. "
-                                     "If you wish to add this functionality, "
-                                     "please look under romspy/interpolation/horizontal/interpolate.py")
+    except OSError:
+        #extension = "." + file[::-1].split(".")[0][::-1]  # get file extension
+        #raise ValueError(extension + " source files are currently not supported. "
+        raise ValueError("not a Netcdf file: " + file + "\n" +
+                         "If you wish to add this functionality, " +
+                         "please look under romspy/interpolation/horizontal/interpolate.py")
     # Room for additional/alternative conversion functions if they appear necessary
 
 
@@ -51,19 +55,40 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
     :param verbose: if events are printed
     :return: output filename
     """
-    varlist = [x['in'] for x in variables]
-    renames = [x for x in variables if x['in'] != x['out']]
+
+    # First we deal with the variables which are interpolated using one
+    # single input variable:
+    varlist1 = [x['in'] for x in variables if 'in' in x]
+    varlist2 = [x['out'] for x in variables if 'expr' in x]
+    renames = [x for x in variables if 'in' in x and x['in'] != x['out']]
     # -selname select the variable by name from file first
     # remap weight is the argument, no need to specify method
     # -f file type
     # -P use 8 cores
+    outfiles = []
     if outfile is None:
-        outfile = cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist) + ' ' + file),
+        outfile = cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file),
                             options=options)
     else:
-        cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist) + ' ' + file),
+        cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file),
                   options=options, output=outfile)
+    outfiles.append(outfile)
 
+    # Now deal with those variables which require a cdo expression rather than just one
+    # single input variable:
+    # the cdo expression is assumed to be x['expr'] if x in variables:
+    for x in variables:
+        if not 'expr' in x:
+            continue
+        outfile = cdo.remap(target + ',' + weight, input=(" -expr,'{}'".format(x['expr']) + ' ' + file),
+                            options=options)
+        outfiles.append(outfile)
+
+    # Merge datasets into one file if necessary:
+    if len(outfiles) > 1:
+        outfile = cdo.merge(input=(' '.join(outfiles)), options=options)
+
+    # Rename output variable if necessary, and set some varible attributes:
     method = os.path.split(weight)[1].split("_")[0]
     with netCDF4.Dataset(outfile, mode='r+') as nc_file:
         # dims = nc_file.variables[varlist[0]].dimensions
@@ -73,20 +98,23 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
         #     nc_file.renameDimension(dims[-2], "eta_rho")
         # if "time" not in dims[-3] and dims[-3] != "depth":
         #     nc_file.renameDimension(dims[-3], "depth")
-        for name in varlist:
-            v: netCDF4.Variable = nc_file.variables[name]
-            v.setncattr('files', all_files)
-            v.setncattr('h_interp_mtd', method)
+        for name in varlist1+varlist2:
+            if 'name' in nc_file.variables:
+                v: netCDF4.Variable = nc_file.variables[name]
+                v.setncattr('files', all_files)
+                v.setncattr('h_interp_mtd', method)
         for var in renames:
-            if verbose:
-                print('Renaming ' + var['in'] + ' to ' + var['out'])
-            nc_file.renameVariable(oldname=var['in'], newname=var['out'])
+            if var['in'] in nc_file.variables:
+                #if verbose:
+                #    print('File '+outfile+': renaming ' + var['in'] + ' to ' + var['out'])
+                nc_file.renameVariable(oldname=var['in'], newname=var['out'])
     if verbose:
         print('Sources and renaming complete!')
     return outfile
 
 
-def calculate_weights(cdo, target_dir: str, sources: list, scrip_grid: str, options: str, verbose: bool):
+def calculate_weights(cdo, target_dir: str, sources: list, scrip_grid: str, options: str,
+                      verbose: bool, in_file: str = ''):
     """
     calculates weights to use to interpolate
     :param cdo: cdo object
@@ -97,23 +125,41 @@ def calculate_weights(cdo, target_dir: str, sources: list, scrip_grid: str, opti
     :param verbose: whether a string is printed when this function is called
     :return: None
     """
-    cdo_mk_weight_mtd = {
-        'bil': cdo.genbil,
-        'bic': cdo.genbic,
-        'nn': cdo.gennn,
-        'dis': cdo.gendis,
-        'con': cdo.gencon,
-        'con2': cdo.gencon2,
-        'laf': cdo.genlaf
-    }
+    # Unfortunately, calling 'cdo genbil ...' twice with the same cdo object gives an error.
+    # So generate a new cdo object:
+    del cdo
+    import cdo as mcdo
+    # cdo_mk_weight_mtd = {
+    #     'bil': cdo.genbil,
+    #     'bic': cdo.genbic,
+    #     'nn': cdo.gennn,
+    #     'dis': cdo.gendis,
+    #     'con': cdo.gencon,
+    #     'con2': cdo.gencon2,
+    #     'laf': cdo.genlaf
+    # }
     if verbose:
         print("Calculating weights. Target directory: " + target_dir)
     for group, index in zip(sources, count()):
+        cdo = mcdo.Cdo(debug=verbose)
+        #print('new cdo object generated!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        cdo_mk_weight_mtd = {
+            'bil': cdo.genbil,
+            'bic': cdo.genbic,
+            'nn': cdo.gennn,
+            'dis': cdo.gendis,
+            'con': cdo.gencon,
+            'con2': cdo.gencon2,
+            'laf': cdo.genlaf
+        }
         mtd_name = group['interpolation_method']
         weight_name = os.path.join(target_dir, mtd_name + '_weight_' + str(index) + ".nc")
         mtd = cdo_mk_weight_mtd[mtd_name]
-        files = group['files']
-        a_file = files if isinstance(files, str) else files[0]
+        if 'files' in group:
+            files = group['files']
+            a_file = files if isinstance(files, str) else files[0]
+        else:
+            a_file = in_file
         mtd(scrip_grid, input=a_file, output=weight_name, options=options)
         group['weight'] = weight_name
 

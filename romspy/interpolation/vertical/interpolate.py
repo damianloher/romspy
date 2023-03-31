@@ -114,10 +114,16 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
             dest_file.createDimension(var_dims[-1], var_dim_lens[2])
             for var in variables:
                 # create variable and set attributes
-                new_var: netCDF4.Variable = dest_file.createVariable(var, 'f', tuple(var_dims))
+                #new_var: netCDF4.Variable = dest_file.createVariable(var, 'f', tuple(var_dims))
                 var_obj = in_file.variables[var]
-                var_attrs = {x: str(var_obj.getncattr(x)) for x in var_obj.ncattrs() if x != "_FillValue"}
+                fill_val = var_obj.getncattr('_FillValue')
+                new_var: netCDF4.Variable = dest_file.createVariable(var, 'f', tuple(var_dims),
+                                fill_value=fill_val)
+                #var_attrs = {x: str(var_obj.getncattr(x)) for x in var_obj.ncattrs() if x != "_FillValue"}
+                var_attrs = {x: var_obj.getncattr(x) for x in var_obj.ncattrs() if x != "_FillValue"}
                 new_var.setncatts(var_attrs)
+                #import pdb
+                #pdb.set_trace()
                 # Time step wise interpolation
                 if verbose:
                     print("Interpolating " + var + " vertically with external C routine timestep wise.")
