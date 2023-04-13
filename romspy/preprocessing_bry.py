@@ -33,7 +33,7 @@ class PreProcessorBry:
             sigma_type - default 3
             file_type - output filetype -  default nc4c
             processes - number of processes cdo should use - default 8
-            cycle_length - value of cycle_length variable attribute (days) - default 365
+            cycle_length - value of cycle_length variable attribute (days) - default 365.25
             bry_time - list of times - default [ 15 45 ... 345 ]
             obc - list of flags indicating open boundaries (1=open 0=closed, [S E N W])
                 - default [0, 0, 0, 0]
@@ -73,7 +73,7 @@ class PreProcessorBry:
         # Other Options
         self._adjustments = None
         self.outfile = outfile
-        self.cycle_length = kwargs.get('cycle_length', 365.0)
+        self.cycle_length = kwargs.get('cycle_length', 365.25)
         self.bry_time = kwargs.get('bry_time', [ 15+i*30 for i in range(12)])
         self.obc = kwargs.get('obc', [0, 0, 0, 0])
         # List of variables:

@@ -54,9 +54,9 @@ def dust_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs
         print('Iron has been added')
 
 
-def swrad_adjustment(file: str, group_files: str, cdo, options, verbose, include_precip=False, **kwargs):
+def swrad_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
     """
-    Scale solar flux
+    Scale solar flux (to convert from J/m^2 to W/m^2, which is expected by ROMS)
     :param preprocessor: PreProcessor object, contains a lot of necessary adjustments
     :param file: file which contains all necessary parameters to calculate dQdSST
     :param group_files: list of all files which contain necessary parameters to calculate dQdSST
@@ -66,12 +66,12 @@ def swrad_adjustment(file: str, group_files: str, cdo, options, verbose, include
     if verbose:
         print("Adjusting for swrad")
     scale = kwargs['swrad_scale']
-    temp = cdo.aexpr("swrad={}*swrad".format(scale), input=file, options=options)
+    temp = cdo.aexpr("swrad={}*swrad".format(scale), input="-setattribute,swrad@units='Watt meter-2' "+file, options=options)
     cdo.copy(input=temp, output=file, options=options)
     if verbose:
         print('swrad scaled')
 
-def swflux_adjustment(file: str, group_files: str, cdo, options, verbose, include_precip=False, **kwargs):
+def swflux_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
     """
     Calculate surface fresh water flux
     :param preprocessor: PreProcessor object, contains a lot of necessary adjustments
@@ -255,7 +255,7 @@ def coads05_time_axes_adjustment(file: str, group_files: str, cdo, options, verb
     file_old = file + '_old'
     os.system('mv {} {}'.format(file,file_old))
     if verbose:
-        print('rename: {}  -->  {}'.format(file,file_old))
+        print('   rename: {}  -->  {}'.format(file,file_old))
     nc_old = netCDF4.Dataset(file_old,'r')
     nt = len(nc_old.dimensions[tdims[0]])
     if 'y' in nc_old.dimensions:
@@ -327,7 +327,16 @@ def coads05_time_axes_adjustment(file: str, group_files: str, cdo, options, verb
         vobj.setncatts(v_attrs)
         vobj[:] = vobj_old[:]
     # Global attributes:
+    import datetime
+    now = datetime.datetime.today()
+    nc.remark1 = 'Created using ROMSpy on {}'.format(now.strftime("%d-%b-%Y %H:%M"))
+    import subprocess
+    result = subprocess.run(['git', 'rev-list', '--max-count=1', 'HEAD', 'HEAD'],
+                            cwd=os.path.dirname(__file__), stdout=subprocess.PIPE)
+    git_commit = result.stdout[:-1].decode('utf-8')
+    nc.remark2 = 'ROMSpy commit: '+git_commit
     att_dict = dict()
+    # Copy global attributes from old file:
     for att in nc_old.ncattrs():
         att_dict[att] = getattr(nc_old,att)
     nc.setncatts(att_dict)
@@ -337,7 +346,7 @@ def coads05_time_axes_adjustment(file: str, group_files: str, cdo, options, verb
     os.system('rm -f {} *_humidity_*.nc *_rho_air_*.nc *_t_air_*.nc *_u_air_*.nc'.format(file_old))
     os.system('rm -f *_SSS_*.nc *_SST_*.nc')
     if verbose:
-        print('wrote {}'.format(file))
+        print('   wrote {}'.format(file))
 
 
 def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
@@ -372,14 +381,25 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
     for m in range(midx-11,midx+1):
         f = file.replace('{:03}'.format(midx), '{:03}'.format(m))
         flist.append(f)
-    # First and last year as requested by the user:
+    # First and last year for which the forcing is to be produced:
     start_year = sources[group_index].get('start_year', None)
     end_year = sources[group_index].get('end_year', None)
+    if not start_year or not end_year:
+        msg = 'start_year and end_year must be specified'
+        raise ValueError(msg)
     # Get year at which the time axes are to start: set it to start_year if
     # the user has not specified it
     start_year_taxes = sources[group_index].get('start_year', None)
     if not start_year_taxes:
         start_year_taxes = start_year
+    # Get first and last years ot the whole simulation: set them to start_year
+    # and last_year if the user did not specify them
+    start_year_run = sources[group_index].get('start_year_run', None)
+    if not start_year_run:
+        start_year_run = start_year
+    end_year_run = sources[group_index].get('end_year_run', None)
+    if not end_year_run:
+        end_year_run = end_year
     # Determine year of this file:
     year = (midx-1)//12 + start_year
     # Get time resolution in days, if applicable
@@ -390,6 +410,13 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
         else:
             tres = float(tres_str[:-1])/24.0
     use_cyclic_time_axes = sources[group_index].get('use_cyclic_time_axes', True)
+    if not use_cyclic_time_axes:
+        # This option determines of the time axes of all years are extended by 2
+        # records (1 just before the start, 1 just after the end of each year) or
+        # if the time axes are only extended by 1 time rec for start_year_run and
+        # end_year_run (1 record just before the start of the run, 1 record just
+        # after the end of the run)
+        extend_taxes_all_years = sources[group_index].get('extend_taxes_all_years', True)
     # Do some checks with this file:
     nc = netCDF4.Dataset(file,'r')
     if not 'sustr' in nc.variables:
@@ -452,8 +479,12 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
         nt = 365
         days_per_month = [31,28,31,30,31,30,31,31,30,31,30,31]
     if not use_cyclic_time_axes:
-        # Increase size of time axes by 2:
-        nt += 2
+        if extend_taxes_all_years:
+            # Increase size of time axes by 2:
+            nt += 2
+        else:
+            if year == start_year_run or year == end_year_run:
+                nt += 1
     for i in range(len(taxes)):
         nc.createDimension(taxes[i], size=nt)
     # Create time variables:
@@ -461,21 +492,25 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
         vobj = nc.createVariable(taxes[i], 'f4', (taxes[i],))
         vobj.long_name = taxes[i]
         vobj.climatological = "means"
-        vobj.units = "days since {}-01-01 00:00".format(start_year)
         if use_cyclic_time_axes:
+            vobj.units = "days since {}-01-01 00:00".format(year)
             if calendar.isleap(year):
                 vobj.cycle_length = 366.0
             else:
                 vobj.cycle_length = 365.0
         else:
+            vobj.units = "days since {}-01-01 00:00".format(start_year_taxes)
             vobj.cycle_length = 0.0
         # Write time variable for each month to output file:
         if use_cyclic_time_axes:
             t1 = 0
             t2 = 30
-        else:
+        elif extend_taxes_all_years or year==start_year_run:
             t1 = 1
             t2 = 31
+        else:
+            t1 = 0
+            t2 = 30
         for m in range(12):
             f = flist[m]
             nc_old = netCDF4.Dataset(f,'r')
@@ -490,8 +525,11 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
             if start_hour_old > 0:
                 msg = 'time axes must start at hour 0 of a day (found hour {})'.format(start_hour_old)
                 raise ValueError(msg)
-            # Adapt time unit to 'days since the start of start_year_taxes':
-            d1 = datetime.date(start_year_taxes,1,1)
+            # Adapt time axes:
+            if use_cyclic_time_axes:
+                d1 = datetime.date(year,1,1)
+            else:
+                d1 = datetime.date(start_year_taxes,1,1)
             d2 = datetime.date(start_year_old,start_month_old,start_day_old)
             delta = (d1-d2).days
             if unit_old_list[0] == 'days':
@@ -507,10 +545,10 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
                 t1 = t2+1
                 t2 = t1 + days_per_month[m+1] - 1
             if not use_cyclic_time_axes:
-                if m == 0:
+                if m == 0 and (extend_taxes_all_years or year==start_year_run):
                     # January:
                     vobj[0] = vobj[1] - tres
-                elif m == 11:
+                elif m == 11 and (extend_taxes_all_years or year==end_year_run):
                     # December:
                     vobj[-1] = vobj[-2] + tres
             nc_old.close()
@@ -544,9 +582,12 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
         if use_cyclic_time_axes:
             t1 = 0
             t2 = 30
-        else:
+        elif extend_taxes_all_years or year==start_year_run:
             t1 = 1
             t2 = 31
+        else:
+            t1 = 0
+            t2 = 30
         for m in range(12):
             f = flist[m]
             nc_old = netCDF4.Dataset(f,'r')
@@ -559,10 +600,10 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
             if not use_cyclic_time_axes:
                 if m == 0:
                     # January:
-                    if year == start_year:
+                    if year == start_year_run:
                         # Duplicate the first time record:
                         vobj[0,:] = vobj[1,:]
-                    else:
+                    elif extend_taxes_all_years:
                         # Set first time record to the last record from December of the
                         # previous year.
                         # Set last time record of December of previous year to the first 
@@ -582,13 +623,40 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
                 elif m == 11:
                     # December:
                     # We only need to assign the last time record if this is the final
-                    # year for which the user has requested data (the other years will
-                    # be completed when January of the following year is processed)
-                    if year == end_year:
+                    # year of the whole run (if necessary, the other years will be
+                    # completed when January of the following year is processed)
+                    if year == end_year_run:
                         # Duplicate last time record:
                         vobj[-1,:] = vobj[-2,:]
+                    elif extend_taxes_all_years and year == end_year:
+                        # Try to fill last time record from data of the next year,
+                        # or duplicate it, if this data is not found:
+                        tmp1 = int(fname[-7:-3]) + 1
+                        tmp1 = '{}'.format(tmp1)
+                        tmp2 = list(fname)
+                        tmp2[-7:-3] = tmp1
+                        file_next = "".join(tmp2)
+                        if os.path.exists(file_next):
+                            if verbose:
+                                print('     file of next Jan: '+file_next)
+                            nc_next = netCDF4.Dataset(file_next,'a')
+                            vobj_next = nc_next.variables[var]
+                            vobj[-1,:] = vobj_next[1,:]
+                            nc_next.close()
+                        else:
+                            # Duplicate last time record:
+                            vobj[-1,:] = vobj[-2,:]
             nc_old.close()
 
+    # Global attributes:
+    import datetime
+    now = datetime.datetime.today()
+    nc.remark1 = 'Created using ROMSpy on {}'.format(now.strftime("%d-%b-%Y %H:%M"))
+    import subprocess
+    result = subprocess.run(['git', 'rev-list', '--max-count=1', 'HEAD', 'HEAD'],
+                            cwd=os.path.dirname(__file__), stdout=subprocess.PIPE)
+    git_commit = result.stdout[:-1].decode('utf-8')
+    nc.remark2 = 'ROMSpy commit: '+git_commit
     # Copy global attributes from January file:
     nc_old = netCDF4.Dataset(flist[0],'r')
     att_dict = dict()
@@ -620,6 +688,99 @@ def check_sst_unit(file: str, group_files: str, cdo, options, verbose, **kwargs)
                 print('corrected SST unit (K --> Celsius) in {}'.format(file))
     nc.close()
 
+def fill_missing(file: str, group_files: str, cdo, options, verbose, **kwargs):
+    """
+        Extrapolate to land for specififed variables
+        :param preprocessor: PreProcessor object, contains a lot of necessary adjustments
+        :param file: file which we want to process
+        :param group_files: list of all data files
+        :param flags: any extra info necessary
+    """
+    fillvars = kwargs.get('fill_missing', [])
+    if isinstance(fillvars,bool) and fillvars:
+        fillvars = ['SST','swrad','shflux','sustr','svstr','swflux','SSS','dQdSST']
+    # Reduce fillvars to existing variables:
+    nc = netCDF4.Dataset(file,'r')
+    tmp = fillvars.copy()
+    for v in tmp:
+        if not v in nc.variables:
+            fillvars.remove(v)
+    nc.close()
+    if len(fillvars) > 0:
+        if verbose:
+            print('fill_missing: fill {}'.format(fillvars))
+        vlist = ','.join(fillvars)
+        vlist_2 = [v+'_2' for v in fillvars]
+        input1 = '-selvar,' + vlist
+        temp = cdo.fillmiss2(input=input1+' '+file, options=options)
+        outfile = cdo.merge(input="{} {}".format(temp,file), options=options)
+        # The merge command generated x_2 variables for x in fillvars, so remove them:
+        cdo.delname(','.join(vlist_2), input=outfile, output=file, options=options)
+
+def Drakkar_correction(file: str, group_files: str, cdo, options, verbose, **kwargs):
+    """
+    Apply Drakkar correction to a single ERA5 based forcing file
+    :param preprocessor: PreProcessor object, contains a lot of necessary adjustments
+    :param file: file we want to apply the Drakkar correction to
+    :param group_files: list of all files which contain necessary parameters to calculate dQdSST
+    :param kwargs: any extra info necessary
+    """
+    sources = kwargs['sources']
+    group_index = kwargs['group_index']
+    data_source = sources[group_index]['data_source']
+    if data_source != 'ERA5':
+        return
+    import os, sys
+    # Folder where the Drakkar correction files are stored:
+    drakkar_corr_folder = data_source = sources[group_index].get('drakkar_correction_folder',None)
+    if not drakkar_corr_folder:
+        drakkar_corr_folder = os.path.dirname(file)
+    # Determine month (Jan=1, ..., Dec=12) of this file: assume the filename ends with _xxx.nc,
+    # where xxx denotes the month index (January of start_year = 1, February of
+    # start_year = 2, ..., January of start_year+1 = 13, ..., December of start_year+1 = 24, etc)
+    midx = int(file[-6:-3])
+    if midx%12 == 0:
+        # It is a December:
+        month = 12
+    else:
+        month = midx%12
+    # Determine year of this file:
+    start_year = sources[group_index].get('start_year', None)
+    year = (midx-1)//12 + start_year
+    # Check the time resolution of the forcing:
+    tres = sources[group_index].get('time_resolution')
+    sys.path.append(os.path.dirname(__file__))
+    import DFS_correction_ERA5
+    if tres == '1d':
+        era_path = '/net/kryo/work/updata/ecmwf-reanalysis/era5_netcdf/daily'
+        # Number of time records to average in input files:
+        timavg = 1
+        # Number of ROMS forcing time records per day:
+        ROMS_frc_tstep_day = 1
+    elif tres == '1d_1h':
+        era_path = '/net/kryo/work/updata/ecmwf-reanalysis/era5_netcdf/hourly'
+        timavg = 24
+        ROMS_frc_tstep_day = 1
+    elif tres[-1] == 'h':
+        era_path = '/net/kryo/work/updata/ecmwf-reanalysis/era5_netcdf/hourly'
+        timavg = int(tres[:-1])
+        ROMS_frc_tstep_day = int(24/timavg)
+    else:
+        raise ValueError('time resolution not supported: {}'.format(tres))
+    # Path to ROMS grid file:
+    target_grid = kwargs.get('target_grid', None)
+    cdo_options = options
+    basedir = os.path.dirname(file)
+    weight_file = '{}/weights/bil_weight_0.nc'.format(basedir)
+    outfile = DFS_correction_ERA5.regrid_dfs_to_romsgrid(target_grid,drakkar_corr_folder,cdo_options,verbose=verbose)
+    corr_file = DFS_correction_ERA5.interpolate_clim_dfs_factors_to_daily(drakkar_corr_folder,outfile,verbose=verbose)
+    rad_file = DFS_correction_ERA5.create_era_frc_radiation(era_path,target_grid,weight_file,basedir,
+                                year,month,timavg,cdo_options,verbose=verbose)
+    DFS_correction_ERA5.make_drakkar_correction(file,corr_file,rad_file,month,ROMS_frc_tstep_day,
+                                                verbose=verbose)
+    os.system('rm -f '+rad_file)
+
+
 forcing_adjustments = [
     {
         'out_var_names': set(), 'in_var_names': {'sustr', 'svstr'},
@@ -646,10 +807,16 @@ forcing_adjustments = [
         'out_var_names': set(), 'in_var_names': {'SST'}, 'func': check_sst_unit
     },
     {
+        'out_var_names': set(), 'in_var_names': set(), 'func': fill_missing
+    },
+    {
         'out_var_names': set(), 'in_var_names': set(), 'func': era5_time_axes_adjustment
     },
     {
         'out_var_names': set(), 'in_var_names': set(), 'func': coads05_time_axes_adjustment
+    },
+    {
+        'out_var_names': set(), 'in_var_names': set(), 'func': Drakkar_correction
     },
 ]
 

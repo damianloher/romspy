@@ -20,7 +20,7 @@ class Interpolator:
 
     def __init__(self, cdo, target_dir: str, sources: list, target_grid: str, scrip_grid: str, z_levels: tuple,
                  shift_pairs, options: str, in_file: str = '', keep_weights: bool = False,
-                 keep_z_clim: bool = False, use_ROMS_grdfile=False, timavg: int = 0, verbose: bool = False):
+                 keep_z_clim: bool = False, use_ROMS_grdfile=False, timavg: int = 0, fillmiss=False, verbose: bool = False):
         """
         Interpolates files horizontally and vertically, and can rotate+shift variable pairs if necessary
         :param cdo: cdo object
@@ -42,6 +42,7 @@ class Interpolator:
         self.in_file = in_file
         self.use_ROMS_grdfile = use_ROMS_grdfile
         self.timavg = timavg
+        self.fillmiss = fillmiss
         self.weight_dir = os.path.join(target_dir, "weights")
         if not os.path.exists(os.path.join(target_dir, "weights")):
             os.makedirs(os.path.join(target_dir, "weights"))
@@ -126,6 +127,9 @@ class Interpolator:
                                   outfile_name if not (shifts or vertical) else (
                                       z_clim_name if not shifts and self.keep_z_clim else None),
                                   self.verbose)
+        if self.fillmiss:
+            # Fill in missing values:
+            outfile = self.cdo.fillmiss2(input=outfile, options=self.options)
 
         # Turn and shift variables in shifts
         if shifts:

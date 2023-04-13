@@ -79,6 +79,10 @@ class PreProcessor:
         self._adjustments = None
         self.outfile = outfile
         self.use_ROMS_grdfile = kwargs.get('use_ROMS_grdfile', False)
+        # Fill in missing values after horizontal interplolation:
+        self.fillmiss_after_hor = kwargs.get('fillmiss_after_hor', False)
+        # Boolean or list of variables for which to extrapolate to land at the end:
+        self.fill_missing = kwargs.get('fill_missing',[])
         # Interpolator
         self.scrip_grid = kwargs.get('scrip_grid', scrip_grid_from_nc(target_grid))
         self.shift_pairs = ShiftPairCollection()
@@ -178,8 +182,10 @@ class PreProcessor:
                 #print('file list: {}'.format(group_files))
             elif 'files' in group:
                 group_files = ','.join(group['files'])
+                timavg = 0
             else:
                 group_files = ''
+                timavg = 0
             variables = group['variables']
             # set of all variables present in out_file after interpolation
             out_variables = {i["out"] for i in variables}
@@ -192,7 +198,7 @@ class PreProcessor:
                             (self.z_level_rho, self.z_level_u, self.z_level_v) if self.has_vertical else None,
                             self.shift_pairs,
                             self.options, '', self.keep_weights, self.keep_z_clim, self.use_ROMS_grdfile,
-                            timavg, self.verbose)
+                            timavg, self.fillmiss_after_hor, self.verbose)
                 # For each file associated with the group of variables
                 for in_file, file_index in zip(group['files'], fidx_iter):
                     # Get the unique filename for each file
@@ -297,7 +303,7 @@ class PreProcessor:
                 # Conversion factor to convert wind stress to time averages (conversion from
                 # N m**-2 s to N m**-2):
                 wind_stress_scale = 1/86400.0
-                # Solar flux conversion factor:
+                # Solar flux conversion factor (to convert from J/m^2 to W/m^2):
                 swrad_scale = stimei
             elif tres == '1d_1h':
                 # Daily ROMS forcing based on hourly ERA5 data: set scaling factors
@@ -311,7 +317,7 @@ class PreProcessor:
                 # Conversion factor to convert wind stress to time averages (conversion from
                 # N m**-2 s to N m**-2):
                 wind_stress_scale = 1/3600.0
-                # Solar flux conversion factor:
+                # Solar flux conversion factor (to convert from J/m^2 to W/m^2):
                 swrad_scale = stimei
             elif tres[-1] == 'h':
                 # Set scaling factors based on hourly ERA5 input:
@@ -324,7 +330,7 @@ class PreProcessor:
                 # Conversion factor to convert wind stress to time averages (conversion from
                 # N m**-2 s to N m**-2):
                 wind_stress_scale = 1/3600.0
-                # Solar flux conversion factor:
+                # Solar flux conversion factor (to convert from J/m^2 to W/m^2):
                 swrad_scale = stimei
             else:
                 msg = 'time resolution not supported: {}\n'.format(tres)
