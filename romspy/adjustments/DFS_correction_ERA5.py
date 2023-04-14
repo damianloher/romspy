@@ -69,7 +69,7 @@ def regrid_dfs_to_romsgrid(grd_file,out_dir,cdo_options,**kwargs):
 def interpolate_clim_dfs_factors_to_daily(output_dir,infile,**kwargs):
     """
     Interpolates the monthly DFS correction factors (assumed to be on the ROMS grid) to daily resolution
-    :param output_dir: folder output file will be read from or written to
+    :param output_dir: folder which output file will be read from or written to
     :param grd_file: ROMS grid file
     Can have any of the following optional arguments:
         verbose - whether to print runtime information - default false

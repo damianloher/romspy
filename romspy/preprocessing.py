@@ -82,7 +82,7 @@ class PreProcessor:
         # Fill in missing values after horizontal interplolation:
         self.fillmiss_after_hor = kwargs.get('fillmiss_after_hor', False)
         # Boolean or list of variables for which to extrapolate to land at the end:
-        self.fill_missing = kwargs.get('fill_missing',[])
+        self.fill_missing = kwargs.get('fill_missing', True)
         # Interpolator
         self.scrip_grid = kwargs.get('scrip_grid', scrip_grid_from_nc(target_grid))
         self.shift_pairs = ShiftPairCollection()
@@ -148,10 +148,11 @@ class PreProcessor:
                     raise ValueError(msg)
                 # Check start/end year and time resolution to figure out which files to use
                 # and over how many time records in the input files we need to average:
-                if group['time_resolution'] == '1d':
-                    dfolder = group['base_folder'] + '/daily'
-                    timavg = 1
-                elif group['time_resolution'] == '1d_1h':
+                # if group['time_resolution'] == '1d':
+                #     dfolder = group['base_folder'] + '/daily'
+                #     timavg = 1
+                # elif group['time_resolution'] == '1d_1h':
+                if group['time_resolution'] == '1d_1h':
                     dfolder = group['base_folder'] + '/hourly'
                     timavg = 24
                 elif group['time_resolution'][-1] == 'h':
@@ -164,7 +165,7 @@ class PreProcessor:
                         raise ValueError(msg)
                 else:
                     msg = 'time resolution not supported: {}\n'.format(group['time_resolution'])
-                    msg += 'supported time resolutions: 1d, 1d_1h, [n]h (where n divides 24)'
+                    msg += 'supported time resolutions: 1d_1h, [n]h (where n divides 24)'
                     raise ValueError(msg)
                 yr1 = group['start_year']
                 yr2 = group['end_year']
