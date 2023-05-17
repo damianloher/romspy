@@ -215,6 +215,7 @@ def coads05_time_axes_adjustment(file: str, group_files: str, cdo, options, verb
     group_index = kwargs['group_index']
     data_source = sources[group_index]['data_source']
     if data_source != 'COADS05':
+        print('   skipped: data source is not COADS05')
         return
     import os
     # Check if the current file looks like a COADS05 ROMS forcing file already:
@@ -362,6 +363,7 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
     group_index = kwargs['group_index']
     data_source = sources[group_index]['data_source']
     if data_source != 'ERA5':
+        print('   skipped: data source is not ERA5')
         return
     import os, datetime, calendar
     # Determine month (Jan=1, ..., Dec=12) of this file: assume the filename ends with _xxx.nc,
@@ -375,6 +377,7 @@ def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose
         month = midx%12
     # Return if this is not a December:
     if month != 12:
+        print('   skipped: current month is not a December')
         return
     # Dtermine all files containing ERA5 data for this year:
     flist = []
@@ -729,10 +732,11 @@ def Drakkar_correction(file: str, group_files: str, cdo, options, verbose, **kwa
     group_index = kwargs['group_index']
     data_source = sources[group_index]['data_source']
     if data_source != 'ERA5':
+        print('   skipped: data source is not ERA5')
         return
     import os, sys
     # Folder where the Drakkar correction files are stored:
-    drakkar_corr_folder = data_source = sources[group_index].get('drakkar_correction_folder',None)
+    drakkar_corr_folder = sources[group_index].get('auxiliary_folder',None)
     if not drakkar_corr_folder:
         drakkar_corr_folder = os.path.dirname(file)
     # Determine month (Jan=1, ..., Dec=12) of this file: assume the filename ends with _xxx.nc,
@@ -780,6 +784,218 @@ def Drakkar_correction(file: str, group_files: str, cdo, options, verbose, **kwa
                                                 verbose=verbose)
     os.system('rm -f '+rad_file)
 
+def river_swflux_correction(file: str, group_files: str, cdo, options, verbose, **kwargs):
+    """
+    Correct freshwater flux due to river input
+    """
+    sources = kwargs['sources']
+    group_index = kwargs['group_index']
+    data_source = sources[group_index]['data_source']
+    if data_source != 'ERA5':
+        print('   skipped: data source is not ERA5')
+        return
+    grd_file = kwargs.get('target_grid', None)
+    # Use the folder for auxiliary files to store the daily river inputs:
+    out_dir = sources[group_index].get('auxiliary_folder',None)
+    # Determine year of this file:
+    midx = int(file[-6:-3])
+    if midx%12 != 0:
+        # It is not a December:
+        print('   skipped: current month is not a December')
+        return
+    import river_runoff
+    import calendar
+    import numpy as np
+    start_year = sources[group_index].get('start_year', None)
+    year = (midx-1)//12 + start_year
+    roms_setup = sources[group_index]['ROMS_setup']
+    outfile = river_runoff.make_river_freshwater(grd_file,roms_setup,out_dir, verbose=verbose)
+    # Determine all forcing files of the current year:
+    flist = []
+    for m in range(midx-11,midx+1):
+        f = file.replace('{:03}'.format(midx), '{:03}'.format(m))
+        flist.append(f)
+    # Read river freshwater input:
+    nc = netCDF4.Dataset(outfile,'r')
+    swflux = nc.variables['swflux'][:]
+    if calendar.isleap(year):
+        swflux = np.concatenate((swflux[:59,:],[0.5*(swflux[58,:]+swflux[59,:])], swflux[59:,:]))
+    nc.close()
+    # Add river freshwater input to forcing files of this year:
+    t1 = 0
+    t2 = 0
+    for f in flist:
+        nc = netCDF4.Dataset(f,'a')
+        vobj = nc.variables['swflux']
+        t1 = t2
+        t2 += nc.dimensions[vobj.dimensions[0]].size
+        if verbose:
+            print('   swflux[{}:{},:] used'.format(t1,t2))
+        vobj[:] += swflux[t1:t2,:]
+        nc.close()
+    if verbose:
+        print('river runoff correction applied to swflux')
+
+def seaice_correction(file: str, group_files: str, cdo, options, verbose, **kwargs):
+    sources = kwargs['sources']
+    group_index = kwargs['group_index']
+    data_source = sources[group_index]['data_source']
+    if data_source != 'ERA5':
+        print('   skipped: data source is not ERA5')
+        return
+    aux_dir = sources[group_index].get('auxiliary_folder',None)
+    # Determine year of this file:
+    midx = int(file[-6:-3])
+    if midx%12 != 0:
+        # It is not a December:
+        print('   skipped: current month is not a December')
+        return
+    import calendar
+    import os
+    import numpy as np
+    start_year = sources[group_index].get('start_year', None)
+    year = (midx-1)//12 + start_year
+    roms_setup = sources[group_index]['ROMS_setup'].lower()
+    seaicefile_default = '{}/{}_seaice_frc.nc'.format(aux_dir,roms_setup)
+    seaicefile = kwargs.get('seaicefile', seaicefile_default)
+    if os.path.exists(seaicefile):
+        nc_seaice = netCDF4.Dataset(seaicefile,'r')
+    else:
+        print('seaice correction NOT done: could not find sea ice file:')
+        print(seaicefile)
+        return
+    snowicefile_default = '{}/{}_snowice_frc.nc'.format(aux_dir,roms_setup)
+    snowicefile = kwargs.get('snowicefile', snowicefile_default)
+    if os.path.exists(snowicefile):
+        nc_snowice = netCDF4.Dataset(snowicefile,'r')
+    else:
+        print('seaice correction NOT done: could not find snow ice file:')
+        print(snowicefile)
+    # Prepare data for the current year:
+    sic = nc_seaice.variables['seaice'][:]
+    swflux_ice = nc_seaice.variables['swflux'][:]
+    shflux_icefrc = nc_seaice.variables['shflux'][:]
+    swflux_snowfrc = nc_snowice.variables['swflux'][:]
+    shflux_snowfrc = nc_snowice.variables['shflux'][:]
+    nc_seaice.close()
+    nc_snowice.close()
+    if calendar.isleap(year):
+        sic = np.concatenate((sic[:59,:],[0.5*(sic[58,:]+sic[59,:])], sic[59:,:]))
+        swflux_ice = np.concatenate((swflux_ice[:59,:],
+                    [0.5*(swflux_ice[58,:]+swflux_ice[59,:])],
+                    swflux_ice[59:,:]))
+        shflux_icefrc = np.concatenate((shflux_icefrc[:59,:],
+                    [0.5*(shflux_icefrc[58,:]+shflux_icefrc[59,:])],
+                    shflux_icefrc[59:,:]))
+        swflux_snowfrc = np.concatenate((swflux_snowfrc[:59,:],
+                    [0.5*(swflux_snowfrc[58,:]+swflux_snowfrc[59,:])],
+                    swflux_snowfrc[59:,:]))
+        shflux_snowfrc = np.concatenate((shflux_snowfrc[:59,:],
+                    [0.5*(shflux_snowfrc[58,:]+shflux_snowfrc[59,:])],
+                    shflux_snowfrc[59:,:]))
+        sic_time = np.arange(0.5,366)
+        cycle_length = 366.0
+    else:
+        sic_time = np.arange(0.5,365)
+        cycle_length = 365.0
+    # Determine all forcing files of the current year:
+    flist = []
+    for m in range(midx-11,midx+1):
+        f = file.replace('{:03}'.format(midx), '{:03}'.format(m))
+        flist.append(f)
+    # Loop over files of the current year:
+    t1 = 0
+    t2 = 0
+    for f in flist:
+        nc_out = netCDF4.Dataset(f,'a')
+        shflux = nc_out.variables['shflux'][:]
+        swrad = nc_out.variables['swrad'][:]
+        swflux = nc_out.variables['swflux'][:]
+        t1 = t2
+        t2 += swrad.shape[0]
+        # Create sea ice related variables in forcing file:
+        nc_out.createDimension('ice_time', size=t2-t1)
+        vobj = nc_out.createVariable('ice_time', 'f4', ('ice_time',))
+        vobj.long_name = "ice_time"
+        vobj.units = "days since {}-01-01 00:00".format(year)
+        vobj.cycle_length = cycle_length
+        vobj.climatological = "means"
+        vobj[:] = sic_time[t1:t2]
+        vobj = nc_out.createVariable('seaice', 'f4', ('ice_time', 'y', 'x',))
+        vobj.long_name = "Seaice fraction"
+        vobj.units = '-'
+        vobj.seaice_corr = '{}/pactcs30_seaice_frc.nc'.format(aux_dir)
+        vobj[:] = sic[t1:t2,:]
+        # Correct fluxes:
+        albedo_ice = 0.85
+        albedo_ocean = 0.06
+        albedo = (sic[t1:t2,:]*albedo_ice)+((1-sic[t1:t2,:])*albedo_ocean)
+        swrad_in = swrad/(1-albedo)
+        swrad = swrad_in*(1-sic[t1:t2,:])*(1-albedo_ocean)
+        swrad_ice = swrad_in*sic[t1:t2,:]*(1-albedo_ice)
+        swflux = swflux+1.3*swflux_ice[t1:t2,:]
+        #
+        # Heat flux:
+        shflux_atm = shflux
+        shflux_ice = shflux_atm*sic[t1:t2,:]  # heat flux into sea ice
+        shflux = shflux_atm*(1-sic[t1:t2,:])  # heat flux that goes directly into cooling or warming the ocean
+        shflux_ice_lat = 1.3*shflux_icefrc[t1:t2,:]  # latent heat flux associated with melting and freezing
+        shflux_ice_melt = shflux_ice_lat
+        shflux_ice_melt[shflux_ice_lat>0] = 0
+        shflux_ice_freeze = shflux_ice_lat
+        shflux_ice_freeze[shflux_ice_lat<0] = 0
+        # Ice melts from below and freezes from above:
+        # i.e. we add the latent heat of freezing to the total ice
+        # flux and also the short wave flux on top of the ice. 
+        # the net is sensible heat into the ice the acts to
+        # cool or warm the ice layer (ice heat capacity). this heat
+        # stored in the ice is released upon melting to the ocean (will
+        # cool the ocean if negative).
+        shflux_ice = shflux_ice+shflux_ice_freeze+swrad_ice
+        # Total latent heat from sea ice and snow melt:
+        shflux_melt = shflux_ice_melt+shflux_snowfrc[t1:t2,:]
+        # Scale 90% of sensible flux (stored heat) with total melt, 10% heat conduction:
+        shflux_ice_sen = (shflux_melt/np.nansum(shflux_melt)) * np.nansum(shflux_ice) * 0.9 \
+                        + 0.1*shflux_ice
+        # Add latent heat of melt and sensible heat flux under ice:
+        shflux = shflux+shflux_ice_melt+shflux_ice_sen
+        #
+        # Wind stress:
+        sic_u = 0.5*(sic[t1:t2,:,:-1]+sic[t1:t2,:,1:])
+        sic_v = 0.5*(sic[t1:t2,:-1,:]+sic[t1:t2,1:,:])
+        factor_ustr = 1-(sic_u)
+        factor_vstr = 1-(sic_v)
+        vobj = nc_out.variables['sustr']
+        sustr = vobj[:]
+        sustr_sic = sustr*sic_u*factor_ustr
+        sustr = (sustr*(1-sic_u))+sustr_sic
+        vobj[:] = sustr
+        del sustr, sic_u
+        vobj = nc_out.variables['svstr']
+        svstr = vobj[:]
+        svstr_sic = svstr*sic_v*factor_vstr
+        svstr = (svstr*(1-sic_v))+svstr_sic
+        vobj[:] = svstr
+        del svstr, sic_v
+        swflux = swflux+swflux_snowfrc[t1:t2,:]
+        shflux = shflux+shflux_snowfrc[t1:t2,:]
+        #
+        # Write remaining corrected variables to output file:
+        vobj = nc_out.variables['swflux']
+        vobj.seaice_corr = seaicefile
+        vobj.snowice_corr = snowicefile
+        vobj[:] = swflux
+        vobj = nc_out.variables['shflux']
+        vobj.seaice_corr = seaicefile
+        vobj.snowice_corr = snowicefile
+        vobj[:] = shflux
+        vobj = nc_out.variables['swrad']
+        vobj.seaice_corr = seaicefile
+        vobj[:] = swrad
+        nc_out.close()
+        if verbose:
+            print('   sea ice correction done in: '+f)
+
 
 forcing_adjustments = [
     {
@@ -810,13 +1026,19 @@ forcing_adjustments = [
         'out_var_names': set(), 'in_var_names': set(), 'func': fill_missing
     },
     {
+        'out_var_names': set(), 'in_var_names': set(), 'func': Drakkar_correction
+    },
+    {
+        'out_var_names': set(), 'in_var_names': set(), 'func': river_swflux_correction
+    },
+    {
+        'out_var_names': {'seaice'}, 'in_var_names': {'sustr','svstr','shflux','swflux','swrad'}, 'func': seaice_correction
+    },
+    {
         'out_var_names': set(), 'in_var_names': set(), 'func': era5_time_axes_adjustment
     },
     {
         'out_var_names': set(), 'in_var_names': set(), 'func': coads05_time_axes_adjustment
-    },
-    {
-        'out_var_names': set(), 'in_var_names': set(), 'func': Drakkar_correction
     },
 ]
 

@@ -3,6 +3,7 @@ import netCDF4
 import os
 import numpy as np
 from itertools import count
+import sys
 
 from romspy.interpolation.interpolator import ShiftPairCollection
 from romspy.verification import test_cdo, has_vertical, verify_sources
@@ -351,10 +352,13 @@ class PreProcessor:
                     # If the output isn't already pre-calculated and all the inputs are in the same file
                     if self.verbose:
                         print("Calling " + str(adjustment['func'].__name__))
+                        sys.stdout.flush()
                         adjustment['func'](file, group_files=group_files, group_index=group_index, options=self.options,
                                             swflux_scale=swflux_scale, wind_stress_scale=wind_stress_scale,
                                             swrad_scale=swrad_scale,
                                             adjustments=self.adjustments, **vars(self))
+                        # Update out_variables, if this adjustment has added a variable:
+                        out_variables |= adjustment['out_var_names']
                     # try:
                     #     if self.verbose:
                     #         print("Calling " + str(adjustment))

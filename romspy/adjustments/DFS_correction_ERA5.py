@@ -2,14 +2,11 @@ import netCDF4
 import cdo
 import os
 import numpy as np
-import pdb
+from romspy import UP_data_paths
 
 """
-Implements the Drakkar correction based on the RomsTools code.
+Implements the Drakkar correction based on the Romstools code.
 """
-
-# Path to Drakkar data set:
-indir = '/net/kryo/work/updata/dfs/dfs5.2_factors/'
 
 def regrid_dfs_to_romsgrid(grd_file,out_dir,cdo_options,**kwargs):
     """
@@ -34,8 +31,8 @@ def regrid_dfs_to_romsgrid(grd_file,out_dir,cdo_options,**kwargs):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     # Shortwave correction factors:
-    file_sw = indir + 'SW_dfs_factor.nc'
-    file_lw = indir + 'LW_dfs_factor.nc'
+    file_sw = UP_data_paths.DFS_data_dir + 'SW_dfs_factor.nc'
+    file_lw = UP_data_paths.DFS_data_dir + 'LW_dfs_factor.nc'
     lcdo = cdo.Cdo(debug=verbose)
     outfiles = []
     outfile = lcdo.remapbil(grd_file, input=file_lw, options=cdo_options)
@@ -73,10 +70,12 @@ def interpolate_clim_dfs_factors_to_daily(output_dir,infile,**kwargs):
     :param grd_file: ROMS grid file
     Can have any of the following optional arguments:
         verbose - whether to print runtime information - default false
+        ROMS_setup - name of ROMS setup - default 'pactcs30'
     """
     import scipy.interpolate
+    roms_setup = kwargs.get('ROMS_setup', 'pactcs30')
     # Check if the file containing the daily factors is present already:
-    out_fname = '{}/dfs_factors_roms_366_days.nc'.format(output_dir)
+    out_fname = '{}/{}_dfs_factors_roms_366_days.nc'.format(output_dir,roms_setup)
     # Return if this file already exists:
     if os.path.exists(out_fname):
         print('found file with daily DFS correction factors: '+out_fname)
@@ -258,7 +257,7 @@ def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
     nc_out.close()
     if verbose:
         print('created radiation file: '+out_fname)
-    # Return list of output files:
+    # Return path to output file:
     return out_fname
 
 
