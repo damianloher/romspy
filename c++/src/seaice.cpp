@@ -227,8 +227,6 @@ void ROMS_forcing::make_seaice_correction(std::vector<std::string> frc_files, in
     array_2d shflux_frc(boost::extents[ny][nx]);
     array_2d shflux_ice_frc(boost::extents[ny][nx]);
     array_2d swrad_ice_frc(boost::extents[ny][nx]);
-    array_2d sustr(boost::extents[ny][nx]);
-    array_2d svstr(boost::extents[ny][nx]);
     int i1, i2, t1, t2, idx;
     float cff, time_factor, tmp, tmp1, tmp2;
     float shflux_ice_lat, shflux_ice_melt, shflux_melt, shflux_ice_freeze, shflux_ice_sen;
@@ -479,6 +477,7 @@ void ROMS_forcing::make_seaice_correction(std::vector<std::string> frc_files, in
                 if (dim.getName() == "xi_u") sustr_on_ugrid = true;
             }
             if (sustr_on_ugrid) nx_sustr = nx - 1;
+            array_2d sustr(boost::extents[ny][nx_sustr]);
             v_sustr.getVar({t,0,0}, {1,ny,nx_sustr}, sustr.data());
             if (sustr_on_ugrid) {
                 for (int j=0; j<ny; ++j)
@@ -503,6 +502,7 @@ void ROMS_forcing::make_seaice_correction(std::vector<std::string> frc_files, in
                 if (dim.getName() == "eta_v") svstr_on_vgrid = true;
             }
             if (svstr_on_vgrid) ny_svstr = ny - 1;
+            array_2d svstr(boost::extents[ny_svstr][nx]);
             v_svstr.getVar({t,0,0}, {1,ny_svstr,nx}, svstr.data());
             if (svstr_on_vgrid) {
                 for (int j=0; j<ny_svstr; ++j)
