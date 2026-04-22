@@ -362,7 +362,11 @@ void ROMS_forcing::make_seaice_correction(std::vector<std::string> frc_files, in
         // Create variable "seaice" if not present already:
         if (!vars_frc.contains("seaice")) {
             //std::println("add variable \"seaice\"");
-            v_seaice = nc_frc.addVar("seaice", "float", {"ice_time","y","x"});
+            if (nc_frc.getDims().contains("x")) {
+                v_seaice = nc_frc.addVar("seaice", "float", {"ice_time","y","x"});
+            } else {
+                v_seaice = nc_frc.addVar("seaice", "float", {"ice_time","eta_rho","xi_rho"});
+            }
             v_seaice.setFill(true, -1.0e3f);
             attval = "Seaice fraction";
             v_seaice.putAtt("long_name", NcType::nc_CHAR, strlen(attval), attval);
