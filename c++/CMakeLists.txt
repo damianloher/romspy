@@ -38,6 +38,7 @@ nanobind_add_module(roms_forcing_utils
    src/roms_forcing_utils.cpp 
    src/river_forcing.cpp
    src/seaice.cpp
+   src/extrapolate_land.cpp
    src/nanobind.cpp)
 
 # The following paths are from module netcdf/4.7.4:
@@ -46,5 +47,6 @@ set(NETCDF_ROOT /usr/local/netcdf-4.7.4-4.5.3-4.3.1-gnu-7.5.0)
 set(NETCDF_INC_PATH ${NETCDF_ROOT}/include)
 set(NETCDF_LIB_PATH ${NETCDF_ROOT}/lib64)
 target_include_directories(roms_forcing_utils PRIVATE ${NETCDF_INC_PATH})
+target_include_directories(roms_forcing_utils PRIVATE nanoflann/include)
 target_link_directories(roms_forcing_utils PRIVATE ${NETCDF_LIB_PATH})
 target_link_libraries(roms_forcing_utils PRIVATE netcdf_c++4 netcdf)

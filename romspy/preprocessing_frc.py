@@ -83,16 +83,21 @@ class PreProcessorFrc:
 
         self.seaice_file = kwargs.get("seaice_file", "")
         self.snowice_file = kwargs.get("snowice_file", "")
+        self.era5_landmask_file = kwargs.get("era5_landmask_file", "")
 
         # CDO options
         self.file_type, self.processes = kwargs.get('file_type', 'nc4c'), kwargs.get('processes', 8)
         # Other Options
+        self.lsm_file = kwargs.get('lsm_file', "")
+        self.lsm_var = kwargs.get('lsm_var', "")
+        self.lsm_limit = kwargs.get('lsm_limit', 0.0)
         self.verbose, self.time_underscored, self.keep_weights, self.keep_z_clim = (
             kwargs.get('verbose', 1), kwargs.get('time_underscored', False),
             kwargs.get('keep_weights', False), kwargs.get('keep_z_clim', False)
         )
         self._adjustments = None
         self.ROMS_setup = ROMSsetup
+        self.outdir = outdir
         self.outfile = f'{outdir}/{ROMSsetup}_frc.nc'
         self.use_ROMS_grdfile = kwargs.get('use_ROMS_grdfile', False)
         # Fill in missing values after horizontal interplolation:
@@ -224,12 +229,13 @@ class PreProcessorFrc:
             if 'files' in group:
                 lsources = [self.sources[group_index]]
                 # Set up interpolator:
-                interp = Interpolator(self.cdo, os.path.split(self.outfile)[0], lsources, self.target_grid,
+                interp = Interpolator(self.cdo, self.outdir, lsources, self.target_grid,
                             self.scrip_grid,
                             (self.z_level_rho, self.z_level_u, self.z_level_v) if self.has_vertical else None,
                             self.shift_pairs,
                             self.options, '', self.keep_weights, self.keep_z_clim, self.use_ROMS_grdfile,
-                            timavg, self.fillmiss_after_hor, self.verbose)
+                            timavg, self.fillmiss_after_hor,
+                            self.lsm_file, self.lsm_var, self.lsm_limit, self.verbose)
                 # For each file associated with the group of variables
                 for in_file, file_index in zip(group['files'], fidx_iter):
                     # Get the unique filename for each file
@@ -255,12 +261,13 @@ class PreProcessorFrc:
                 for x in variables:
                     for in_file, file_index in zip(x['files'], count(start=1)):
                         # Set up interpolator:
-                        interp = Interpolator(self.cdo, os.path.split(self.outfile)[0], lsources, self.target_grid,
+                        interp = Interpolator(self.cdo, self.outdir, lsources, self.target_grid,
                             self.scrip_grid,
                             (self.z_level_rho, self.z_level_u, self.z_level_v) if self.has_vertical else None,
                             self.shift_pairs,
                             self.options, in_file, self.keep_weights, self.keep_z_clim, self.use_ROMS_grdfile,
-                            self.verbose)
+                            timavg, self.fillmiss_after_hor,
+                            self.lsm_file, self.lsm_var, self.lsm_limit, self.verbose)
                         out_file = '{}_{}_{}_{:03}.nc'.format(self.outfile[:-3],x['out'],
                                                               group_index,file_index)
                         outfiles.append(out_file)

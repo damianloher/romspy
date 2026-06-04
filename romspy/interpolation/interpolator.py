@@ -21,7 +21,8 @@ class Interpolator:
 
     def __init__(self, cdo, target_dir: str, sources: list, target_grid: str, scrip_grid: str, z_levels: tuple,
                  shift_pairs, options: str, in_file: str = '', keep_weights: bool = False,
-                 keep_z_clim: bool = False, use_ROMS_grdfile=False, timavg: int = 0, fillmiss=False, verbose: int = 1):
+                 keep_z_clim: bool = False, use_ROMS_grdfile=False, timavg: int = 0, fillmiss=False,
+                 lsm_file: str = "", lsm_var: str = "", lsm_limit: float = 0.0, verbose: int = 1):
         """
         Interpolates files horizontally and vertically, and can rotate+shift variable pairs if necessary
         :param cdo: cdo object
@@ -47,6 +48,10 @@ class Interpolator:
         self.weight_dir = os.path.join(target_dir, "weights")
         os.makedirs(os.path.join(target_dir, "weights"), exist_ok=True)
         self.shift_pairs = shift_pairs
+        self.lsm_file = lsm_file
+        self.lsm_var = lsm_var
+        self.lsm_limit = lsm_limit
+        self.outdir = target_dir
         #self.calculate_horizontal_weights()
 
     def __enter__(self):
@@ -138,9 +143,9 @@ class Interpolator:
         print("weight file used: "+group['weight'])
         sys.stdout.flush()
         outfile = cdo_interpolate(self.cdo, file, group['weight'], grdfile, variables, all_files, self.options,
-                                  outfile_name if not (shifts or vertical) else (
+                                  self.outdir, outfile_name if not (shifts or vertical) else (
                                       z_clim_name if not shifts and self.keep_z_clim else None),
-                                  self.verbose)
+                                  self.lsm_file, self.lsm_var, self.lsm_limit, self.verbose)
         if self.fillmiss:
             # Fill in missing values:
             #outfile = self.cdo.fillmiss2(input=outfile, options=self.options)
@@ -200,7 +205,8 @@ class Interpolator:
         if self.use_ROMS_grdfile:
             grdfile = self.target_grid
         else:
-            grdfile = self.scrip_grid
+            msg = "use of SCRIP grid file not implemented. Please use the ROMS grid file instead."
+            raise ValueError(msg)
         # Check if the source grid is compatible with the weight file:
         import netCDF4
         print("calculate_horizontal_weights: check weight file")
@@ -209,6 +215,7 @@ class Interpolator:
         else:
             lfile = group["variables"][0]["files"][0]
         #print(f"   lfile = {lfile}")
+        nc_grd = netCDF4.Dataset(grdfile,'r')
         nc = netCDF4.Dataset(lfile,'r')
         lvar = variables[0]['in']
         mtd_name = group['interpolation_method']
@@ -216,23 +223,33 @@ class Interpolator:
         print(f"   weight_name = {weight_name}")
         sys.stdout.flush()
         if lvar in nc.variables:
+            # Check compatibility with source grid (i.e. the data grid):
             vobj = nc.variables[lvar]
             nx = len(nc.dimensions[vobj.dimensions[-1]])
             ny = len(nc.dimensions[vobj.dimensions[-2]])
             if os.path.exists(weight_name):
                 nc_w = netCDF4.Dataset(weight_name,'r')
                 ns = len(nc_w.dimensions["src_grid_size"])
+                nd = len(nc_w.dimensions["dst_grid_size"])
                 nc_w.close()
-                if ns != nx*ny:
+                if ns != nsx*nsy:
                     # Remove weight file, since it was created for a different source grid:
-                    print("   remove weight file since it is incompatible with the current source grid")
-                    os.system(f"rm {weight_name}")
+                    print("   remove weight file since it is incompatible with the current source grid:")
+                    print(f"      {wname}")
                 else:
-                    print("   keep weight file since it is compatible with the current source grid")
+                    if nd != ndx*ndy:
+                        # Remove weight file, since it was created for a different dest grid:
+                        print("   remove weight file since it is incompatible with the current dest grid:")
+                        os.system(f"rm {wname}")
+                        print(f"      {wname}")
+                    else:
+                        print("   keep weight file since it is compatible with the current source and dest grid:")
+                        print(f"      {wname}")
         else:
             print(f"   variable {lvar} not found in lfile -> remove weight file")
             os.system(f"rm {weight_name}")
         nc.close()
+        nc_grd.close()
         calculate_weights(self.cdo, self.weight_dir, group, group_index, grdfile, self.options,
                           self.verbose, in_file=self.in_file)
 

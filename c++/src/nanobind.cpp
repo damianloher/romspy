@@ -13,7 +13,8 @@ NB_MODULE(roms_forcing_utils, m) {
         .def("rel_humidity", &ROMS_forcing::rel_humidity)
         .def("wind_stress", &ROMS_forcing::wind_stress)
         .def("make_river_freshwater", &ROMS_forcing::make_river_freshwater)
-        .def("make_seaice_correction", &ROMS_forcing::make_seaice_correction);
+        .def("make_seaice_correction", &ROMS_forcing::make_seaice_correction)
+        .def("extrapolate_land", &ROMS_forcing::extrapolate_land);
     //m.def("rel_humidity", &rel_humidity, "outfile"_a, "year"_a, "t2m_file"_a, "d2m_file"_a,
     //    "Computes relative humidity according to the recommendation of the ERA5 documentation.");
     m.doc() = "Class for computing certain parts of a ROMS forcing";

@@ -6,6 +6,7 @@ License: GNU GPL2+
 import netCDF4
 from romspy import UP_data_paths
 import sys
+import os
 
 
 def str_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
@@ -360,6 +361,25 @@ def coads05_time_axes_adjustment(file: str, group_files: str, cdo, options, verb
         print(f'   wrote {file}')
         sys.stdout.flush()
 
+def era5_extrapolate_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
+    sources = kwargs['sources']
+    group_index = kwargs['group_index']
+    data_source = sources[group_index]['data_source']
+    if data_source != 'ERA5':
+        print('   skipped: data source is not ERA5')
+        return
+    grd_file = kwargs.get('target_grid', None)
+    if not grd_file:
+        print('   skipped: no ROMS grid file given')
+        return
+    out_dir = sources[group_index].get('auxiliary_folder',None)
+    roms_setup = sources[group_index]['ROMS_setup']
+    # List of variables to extrapolate:
+    vlist = ["sustr","svstr","shflux","swrad","swflux"]
+    sys.path.append(os.path.dirname(__file__)+"/../../c++/build")
+    import roms_forcing_utils
+    roms_frc = roms_forcing_utils.ROMS_frc(roms_setup, grd_file, out_dir, True)
+    roms_frc.extrapolate_land(file, grd_file, vlist)
 
 def era5_time_axes_adjustment(file: str, group_files: str, cdo, options, verbose, **kwargs):
     """
@@ -1013,14 +1033,17 @@ forcing_adjustments = [
     {
         'out_var_names': set(), 'in_var_names': set(), 'func': Drakkar_correction
     },
-    {
-        'out_var_names': set(), 'in_var_names': set(), 'func': fill_missing
-    },
+    #{
+    #    'out_var_names': set(), 'in_var_names': set(), 'func': fill_missing
+    #},
     {
         'out_var_names': set(), 'in_var_names': set(), 'func': river_swflux_correction
     },
     {
         'out_var_names': {'seaice'}, 'in_var_names': {'sustr','svstr','shflux','swflux','swrad'}, 'func': seaice_correction
+    },
+    {
+        'out_var_names': set(), 'in_var_names': set(), 'func': era5_extrapolate_adjustment
     },
     {
         'out_var_names': set(), 'in_var_names': set(), 'func': era5_time_axes_adjustment

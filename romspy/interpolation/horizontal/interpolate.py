@@ -1,5 +1,6 @@
 from itertools import count
 import netCDF4
+import numpy as np
 import os
 
 """
@@ -9,7 +10,8 @@ License: GNU GPL2+
 
 
 def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: list, all_files: str, options: str,
-                    outfile: str = None, verbose: int = 1) -> str:
+                outdir: str, outfile: str = None, lsm_file: str = "", lsm_var: str = "", lsm_limit: float = 0.0,
+                verbose: int = 1) -> str:
     """
     Extract a variable from file and interpolate according to weight
     :param cdo: cdo object
@@ -31,7 +33,8 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: li
     try:
         nc = netCDF4.Dataset(file,'r')
         nc.close()
-        return __interpolate_nc(cdo, file, weight, target_grid, variables, all_files, outfile, options, verbose)
+        return __interpolate_nc(cdo, file, weight, target_grid, variables, all_files, outfile, outdir,
+                        options, lsm_file, lsm_var, lsm_limit, verbose)
     except OSError:
         #extension = "." + file[::-1].split(".")[0][::-1]  # get file extension
         #raise ValueError(extension + " source files are currently not supported. "
@@ -41,8 +44,8 @@ def cdo_interpolate(cdo, file: str, weight: str, target_grid: str, variables: li
     # Room for additional/alternative conversion functions if they appear necessary
 
 
-def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, all_files: str, outfile: str,
-                     options: str, verbose: int) -> str:
+def __interpolate_nc(cdo, file: str, weight: list, target: str, variables: list, all_files: str, outfile: str,
+                     outdir: str, options: str, lsm_file: str, lsm_var: str, lsm_limit: float, verbose: int) -> str:
     """
     Interpolate and extract variable
     :param cdo: cdo object
@@ -57,6 +60,13 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
     :return: output filename
     """
 
+    if len(lsm_file) > 0:
+        # Read land-sea mask:
+        nc = netCDF4.Dataset(lsm_file,'r')
+        lsm = nc.variables[lsm_var][0,:]
+        nc.close()
+        # Define land-sea mask (True on the land):
+        lsm_mask = (lsm>=lsm_limit)
     # First we deal with the variables which are interpolated using one
     # single input variable:
     varlist1 = []
@@ -65,6 +75,33 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
             varlist1 += x['in']
         else:
             varlist1.append(x['in'])
+    if len(lsm_file) > 0:
+        # Mask ERA variables: first we need to make sure that we are working
+        # on a local file, not on one in /net/sea/work/datasets:
+        file_out = f"{outdir}/{os.path.basename(file)}"
+        if not os.path.exists(file_out):
+            print(f"copy {file} --> {file_out}")
+            var_list = ",".join(varlist1)
+            cmd = f"/usr/local/bin/ncks -v {var_list} {file} {file_out}"
+            os.system(cmd)
+        print(f"apply land-sea mask from {lsm_file}")
+        nc = netCDF4.Dataset(file_out,'a')
+        nt = len(nc.dimensions["time"])
+        for v in varlist1:
+            print(f"   v = {v}")
+            vobj = nc.variables[v]
+            # if hasattr(vobj,'_FillValue'):
+            #     fillval = vobj._FillValue
+            # else:
+            #     fillval = np.nan
+            for t in range(nt):
+                tmp = vobj[t,:]
+                tmp[lsm_mask] = np.nan
+                vobj[t,:] = tmp
+        nc.close()
+    else:
+        # No masking of ERA data to be done: use whatever "file" points to:
+        file_out = file
     #varlist1 = [x['in'] for x in variables if 'in' in x]
     varlist2 = [x['out'] for x in variables if 'expr' in x]
     renames = [x for x in variables if 'in' in x and x['in'] != x['out']]
@@ -74,11 +111,11 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
     # -P use 8 cores
     outfiles = []
     if outfile is None:
-        outfile = cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file),
+        outfile = cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file_out),
                             options=options)
     else:
         if not os.path.exists(outfile):
-            cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file),
+            cdo.remap(target + ',' + weight, input=(' -selname,' + ','.join(varlist1) + ' ' + file_out),
                       options=options, output=outfile)
     outfiles.append(outfile)
 
@@ -89,11 +126,11 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
         if not 'expr' in x:
             continue
         if outfile is None:
-            outfile = cdo.remap(target + ',' + weight, input=(f" -expr,'{x['expr']}'" + ' ' + file),
+            outfile = cdo.remap(target + ',' + weight, input=(f" -expr,'{x['expr']}'" + ' ' + file_out),
                                 options=options)
         else:
             if not os.path.exists(outfile):
-                outfile = cdo.remap(target + ',' + weight, input=(f" -expr,'{x['expr']}'" + ' ' + file),
+                outfile = cdo.remap(target + ',' + weight, input=(f" -expr,'{x['expr']}'" + ' ' + file_out),
                                 options=options, output=outfile)
         outfiles.append(outfile)
 
@@ -133,14 +170,14 @@ def __interpolate_nc(cdo, file: str, weight: str, target: str, variables: list, 
     return outfile
 
 
-def calculate_weights(cdo, target_dir: str, group: dict, group_index: int, scrip_grid: str, options: str,
+def calculate_weights(cdo, target_dir: str, group: dict, group_index: int, roms_grid: str, options: str,
                       verbose: int, in_file: str = ''):
     """
     calculates weights to use to interpolate
     :param cdo: cdo object
     :param target_dir: location to store weights under
     :param sources: list of dictionaries describing sources
-    :param scrip_grid: grid to interpolate onto
+    :param roms_grid: grid file of target grid
     :param options: cdo options
     :param verbose: whether a string is printed when this function is called
     :return: None
@@ -149,15 +186,6 @@ def calculate_weights(cdo, target_dir: str, group: dict, group_index: int, scrip
     # So generate a new cdo object:
     del cdo
     import cdo as mcdo
-    # cdo_mk_weight_mtd = {
-    #     'bil': cdo.genbil,
-    #     'bic': cdo.genbic,
-    #     'nn': cdo.gennn,
-    #     'dis': cdo.gendis,
-    #     'con': cdo.gencon,
-    #     'con2': cdo.gencon2,
-    #     'laf': cdo.genlaf
-    # }
     cdo = mcdo.Cdo(debug=(verbose>2))
     cdo_mk_weight_mtd = {
         'bil': cdo.genbil,
@@ -181,7 +209,7 @@ def calculate_weights(cdo, target_dir: str, group: dict, group_index: int, scrip
         a_file = files if isinstance(files, str) else files[0]
     else:
         a_file = in_file
-    mtd(scrip_grid, input=a_file, output=weight_name, options=options)
+    mtd(roms_grid, input=a_file, output=weight_name, options=options)
 
 
 """

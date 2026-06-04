@@ -19,6 +19,9 @@ public:
         std::string river_input_file, int days_per_year);
     void make_seaice_correction(std::vector<std::string> frc_files, int year, std::string seaice_file,
         std::string snowice_file, int time_res_h, bool verbose);
+    void extrapolate_land(std::string ROMS_file, std::string ROMS_gridfile,
+        std::vector<std::string> variables);
+    void era_extrapolate_land(std::string ERA_file, std::vector<std::string> variables);
 private:
     std::string ROMS_setup;
     std::string ROMS_gridfile;

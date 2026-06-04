@@ -31,11 +31,38 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
             angle = angle[:]
     with netCDF4.Dataset(in_file, mode='r+') as _in:
         with netCDF4.Dataset(temp_out_path, mode="w") as _out:
-            _out.createDimension("xi_u", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-1]]) - 1)
-            _out.createDimension("eta_v", len(_in.dimensions[_in.variables[variables[0][0]].dimensions[-2]]) - 1)
+            if not "xi_u" in _out.dimensions:
+                if "xi_rho" in _in.dimensions:
+                    _out.createDimension("xi_u", len(_in.dimensions["xi_rho"]) - 1)
+                elif "xi_u" in _in.dimensions:
+                    _out.createDimension("xi_u", len(_in.dimensions["xi_u"]))
+                else:
+                    _out.createDimension("xi_u", len(_in.dimensions["xi_v"] - 1))
+            if not "eta_u" in _out.dimensions:
+                if "eta_rho" in _in.dimensions:
+                    _out.createDimension("eta_u", len(_in.dimensions["eta_rho"]))
+                elif "eta_u" in _in.dimensions:
+                    _out.createDimension("eta_u", len(_in.dimensions["eta_u"]))
+                else:
+                    _out.createDimension("eta_u", len(_in.dimensions["eta_v"]) + 1)
+            if not "xi_v" in _out.dimensions:
+                if "xi_rho" in _in.dimensions:
+                    _out.createDimension("xi_v", len(_in.dimensions["xi_rho"]))
+                elif "xi_u" in _in.dimensions:
+                    _out.createDimension("xi_v", len(_in.dimensions["xi_u"]) + 1)
+                else:
+                    _out.createDimension("xi_v", len(_in.dimensions["xi_v"]))
+            if not "eta_v" in _out.dimensions:
+                if "eta_rho" in _in.dimensions:
+                    _out.createDimension("eta_v", len(_in.dimensions["eta_rho"]) - 1)
+                elif "eta_u" in _in.dimensions:
+                    _out.createDimension("eta_v", len(_in.dimensions["eta_u"]) - 1)
+                else:
+                    _out.createDimension("eta_v", len(_in.dimensions["eta_v"]))
             for dim in _in.variables[variables[0][0]].dimensions:
                 dim_len = len(_in.dimensions[dim])
-                _out.createDimension(dim, dim_len)
+                if not dim in _out.dimensions:
+                    _out.createDimension(dim, dim_len)
                 if dim == "depth":
                     d_obj = _out.createVariable("depth", 'd', ("depth",))
                     d_obj[:] = _in.variables["depth"][:]
@@ -48,6 +75,8 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
                 dims = list(u_obj.dimensions)
                 u_dims, v_dims = dims.copy(), dims
                 u_dims[-1] = "xi_u"
+                u_dims[-2] = "eta_u"
+                v_dims[-1] = "xi_v"
                 v_dims[-2] = "eta_v"
                 is_3d = len(u_dims) > 3
 
@@ -58,11 +87,12 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
                 new_v.setncatts({x: v_obj.getncattr(x) for x in v_obj.ncattrs()})
                 for t in range(time_length):
                     u_contents, v_contents = u_obj[t], v_obj[t]
-
+                    # Rotate u and v components on rho grid:
                     cosa = np.cos(angle)
                     sina = np.sin(angle)
                     u_turned = u_contents * cosa + v_contents * sina
                     v_turned = v_contents * cosa - u_contents * sina
+                    # Interpolate to u and v grid, respectively:
                     if is_3d:
                         u_contents = 0.5 * (u_turned[:, :, 1:] + u_turned[:, :, :-1])
                         v_contents = 0.5 * (v_turned[:, 1:, :] + v_turned[:, :-1, :])
