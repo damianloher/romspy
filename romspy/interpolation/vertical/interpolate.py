@@ -1,6 +1,7 @@
 import netCDF4
 import numpy as np
 import os
+import romspy.Global_settings as Global_settings
 
 """
 Author: Nicolas Munnich
@@ -141,7 +142,7 @@ def apply_vert_weights(cdo, apply_fun, weight_file: str, file: str, outfile: str
     if file != temp_out_path:
         # Execute cdo command directly:
         temp_merge = temp_out_path + "_2"
-        cmd = f"/usr/local/bin/cdo {options} -merge {file} {temp_out_path} {temp_merge}"
+        cmd = f"{Global_settings.cdo} {options} -merge {file} {temp_out_path} {temp_merge}"
         if verbose:
             print(cmd)
         os.system(cmd)

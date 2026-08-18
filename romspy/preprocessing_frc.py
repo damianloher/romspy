@@ -48,9 +48,9 @@ class PreProcessorFrc:
             use_ROMS_grdfile - whether the ROMS grid file is to be used instead of a SCRIP format grid file - default False
         """
         print()
-        print('\033[1;32m===================\033[0m')
-        print('\033[1;32mAtmospheric forcing\033[0m')
-        print('\033[1;32m===================\033[0m')
+        print('\033[1;32m============================\033[0m')
+        print('\033[1;32mAtmospheric physical forcing\033[0m')
+        print('\033[1;32m============================\033[0m')
         print()
         sys.stdout.flush()
         # Level of verbosity:
@@ -62,6 +62,14 @@ class PreProcessorFrc:
         # Sources
         #verify_sources(sources, kwargs.get('verbose', False))
         self.sources, self.target_grid = sources, target_grid
+
+        # Check if start_year and start_year_run are equal:
+        for gr in sources:
+            if not 'start_year' in gr or not 'start_year_run' in gr:
+                continue
+            if gr['start_year'] != gr['start_year_run']:
+                msg = f"{gr['start_year']} and {gr['start_year_run']} must be equal"
+                raise ValueError(msg)
 
         # Vertical interpolation information
         # Replace anything not passed in with default values
@@ -83,13 +91,16 @@ class PreProcessorFrc:
 
         self.seaice_file = kwargs.get("seaice_file", "")
         self.snowice_file = kwargs.get("snowice_file", "")
-        self.era5_landmask_file = kwargs.get("era5_landmask_file", "")
+        self.seaice_indir = kwargs.get("seaice_indir", "")
 
         # CDO options
         self.file_type, self.processes = kwargs.get('file_type', 'nc4c'), kwargs.get('processes', 8)
         # Other Options
+        # ERA land-sea mask file:
         self.lsm_file = kwargs.get('lsm_file', "")
         self.lsm_var = kwargs.get('lsm_var', "")
+        # Limit for considering cells of ERA grid as land: cells with a land fraction above
+        # this limit will be considered as land
         self.lsm_limit = kwargs.get('lsm_limit', 0.0)
         self.verbose, self.time_underscored, self.keep_weights, self.keep_z_clim = (
             kwargs.get('verbose', 1), kwargs.get('time_underscored', False),
@@ -208,8 +219,12 @@ class PreProcessorFrc:
                         if os.path.exists(fname):
                             flist.append(fname)
                         else:
-                            msg = 'file not found: ' + fname
-                            raise ValueError(msg)
+                            fname = '{0}/for_romstools/{1}/ERA5_{1}_{2:02}.nc'.format(dfolder,yr,m)
+                            if os.path.exists(fname):
+                                flist.append(fname)
+                            else:
+                                msg = 'file not found: ' + fname
+                                raise ValueError(msg)
                 if len(flist) == 0:
                     msg = 'no ERA5 data files selected'
                     raise ValueError(msg)
@@ -411,9 +426,7 @@ class PreProcessorFrc:
                         t1 = time.time()
                         adjustment['func'](file, group_files=group_files, group_index=group_index, options=self.options,
                                             swflux_scale=swflux_scale, wind_stress_scale=wind_stress_scale,
-                                            swrad_scale=swrad_scale, #h=self.h, num_layers=self.layers,
-                                            #sigma_type=self.sigma_type,
-                                            #zeta=self.z_level_rho,
+                                            swrad_scale=swrad_scale,
                                             seaicefile=self.seaice_file, snowicefile=self.snowice_file,
                                             adjustments=self.adjustments, **vars(self))
                         t2 = time.time()

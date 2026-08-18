@@ -5,6 +5,8 @@ from romspy.interpolation.vertical.load_c_libs import bil_weight_extra_len
 from romspy.interpolation.vertical import gen_vert_bil, interp_bil
 import os
 import sys
+import subprocess
+import romspy.Global_settings as Global_settings
 
 """
 Author: Nicolas Munnich
@@ -150,10 +152,11 @@ class Interpolator:
             # Fill in missing values:
             #outfile = self.cdo.fillmiss2(input=outfile, options=self.options)
             outfile2 = f"{outfile}_2"
-            cmd = f"/usr/local/bin/cdo {self.options} -fillmiss2 {outfile} {outfile2}"
+            cmd = f"{Global_settings.cdo} {self.options} -fillmiss2 {outfile} {outfile2}"
             print(cmd)
             sys.stdout.flush()
-            os.system(cmd)
+            #os.system(cmd)
+            subprocess.run(cmd, shell=True, check=True)
             outfile = outfile2
 
         # Turn and shift variables in shifts
@@ -216,6 +219,8 @@ class Interpolator:
             lfile = group["variables"][0]["files"][0]
         #print(f"   lfile = {lfile}")
         nc_grd = netCDF4.Dataset(grdfile,'r')
+        ndx = len(nc_grd.dimensions["xi_rho"])
+        ndy = len(nc_grd.dimensions["eta_rho"])
         nc = netCDF4.Dataset(lfile,'r')
         lvar = variables[0]['in']
         mtd_name = group['interpolation_method']
@@ -225,8 +230,8 @@ class Interpolator:
         if lvar in nc.variables:
             # Check compatibility with source grid (i.e. the data grid):
             vobj = nc.variables[lvar]
-            nx = len(nc.dimensions[vobj.dimensions[-1]])
-            ny = len(nc.dimensions[vobj.dimensions[-2]])
+            nsx = len(nc.dimensions[vobj.dimensions[-1]])
+            nsy = len(nc.dimensions[vobj.dimensions[-2]])
             if os.path.exists(weight_name):
                 nc_w = netCDF4.Dataset(weight_name,'r')
                 ns = len(nc_w.dimensions["src_grid_size"])
@@ -235,16 +240,16 @@ class Interpolator:
                 if ns != nsx*nsy:
                     # Remove weight file, since it was created for a different source grid:
                     print("   remove weight file since it is incompatible with the current source grid:")
-                    print(f"      {wname}")
+                    print(f"      {weight_name}")
                 else:
                     if nd != ndx*ndy:
                         # Remove weight file, since it was created for a different dest grid:
                         print("   remove weight file since it is incompatible with the current dest grid:")
-                        os.system(f"rm {wname}")
-                        print(f"      {wname}")
+                        os.system(f"rm {weight_name}")
+                        print(f"      {weight_name}")
                     else:
                         print("   keep weight file since it is compatible with the current source and dest grid:")
-                        print(f"      {wname}")
+                        print(f"      {weight_name}")
         else:
             print(f"   variable {lvar} not found in lfile -> remove weight file")
             os.system(f"rm {weight_name}")

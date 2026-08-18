@@ -1,6 +1,8 @@
 import os
 import netCDF4
 import numpy as np
+import romspy.Global_settings as Global_settings
+import subprocess
 
 """
 Author: Nicolas Munnich
@@ -17,7 +19,6 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
     :param variables:
     :param options:
     :param verbose:
-    :param out_file:
     :return:
     """
 
@@ -83,8 +84,24 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
                 time_length = len(_in.dimensions[dims[0]])
                 new_u: netCDF4.Variable = _out.createVariable(u, 'f', tuple(u_dims))
                 new_v: netCDF4.Variable = _out.createVariable(v, 'f', tuple(v_dims))
-                new_u.setncatts({x: u_obj.getncattr(x) for x in u_obj.ncattrs()})
-                new_v.setncatts({x: v_obj.getncattr(x) for x in v_obj.ncattrs()})
+                #new_u.setncatts({x: u_obj.getncattr(x) for x in u_obj.ncattrs()})
+                #new_v.setncatts({x: v_obj.getncattr(x) for x in v_obj.ncattrs()})
+                new_atts = {}
+                for x in u_obj.ncattrs():
+                    if x in ['_FillValue','missing_value']:
+                        # Make sure value is a float:
+                        new_atts[x] = np.float32(u_obj.getncattr(x))
+                    else:
+                        new_atts[x] = u_obj.getncattr(x)
+                new_u.setncatts(new_atts)
+                new_atts = {}
+                for x in v_obj.ncattrs():
+                    if x in ['_FillValue','missing_value']:
+                        # Make sure value is a float:
+                        new_atts[x] = np.float32(v_obj.getncattr(x))
+                    else:
+                        new_atts[x] = v_obj.getncattr(x)
+                new_v.setncatts(new_atts)
                 for t in range(time_length):
                     u_contents, v_contents = u_obj[t], v_obj[t]
                     # Rotate u and v components on rho grid:
@@ -102,28 +119,37 @@ def adjust_vectors(cdo, in_file, target_grid, variables, options, verbose=True, 
 
                     new_u[t] = u_contents
                     new_v[t] = v_contents
-                _in.renameVariable(u, "tmp_" + u)
-                _in.renameVariable(v, "tmp_" + v)
+                # Set coordinates attribute of u and v:
+                new_u.coordinates = "lat_u lon_u"
+                new_v.coordinates = "lat_v lon_v"
+                # Rename unrotated varibles to avoid confusion:
+                _in.renameVariable(u, u+"_nonrotated")
+                _in.renameVariable(v, v+"_nonrotated")
 
     #t_name = cdo.merge(input=in_file + " " + temp_out_path, options=options)
     #if not os.path.exists(t_name):
     if in_file != temp_out_path:
         # Execute cdo command directly:
-        t_name = temp_out_path + "_2"
-        cmd = f"/usr/local/bin/cdo {options} -merge {in_file} {temp_out_path} {t_name}"
-        if verbose:
-            print(cmd)
-        os.system(cmd)
-    else:
-        t_name = in_file
-    if out_file is not None:
-        cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
-                    options=options)
-    else:
-        out_file = cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name,
-                               options=options)
+        #t_name = temp_out_path + "_2"
+        # cmd = f"{Global_settings.cdo} {options} -merge {in_file} {temp_out_path} {t_name}"
+        # if verbose:
+        #     print(cmd)
+        # os.system(cmd)
+        if 'u' in locals() and 'v' in locals():
+            subprocess.run([Global_settings.ncks,"-A","-v",f'{u},{v}',temp_out_path,in_file], check=True)
+    # else:
+    # if out_file is not None:
+    #     cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name, output=out_file,
+    #                 options=options)
+    # else:
+    #     out_file = cdo.delname(",".join(["tmp_" + u + ",tmp_" + v for u, v in variables]), input=t_name,
+    #                            options=options)
     os.remove(temp_out_path)
-    return out_file
+    if out_file is not None:
+        os.rename(in_file,out_file)
+        return out_file
+    else:
+        return in_file
 
 
 def shift(h: np.ndarray, grid_type: int):

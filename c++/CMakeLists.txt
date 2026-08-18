@@ -1,7 +1,7 @@
 # Compilation: g++-15 must be available (e.g. on begonia)
 # - activate conda env romspy:
 #    source activate romspy
-# - execute "cmake -B ..." and "cmake --build"
+# - execute "cmake -B build" and "cmake --build build"
 
 cmake_minimum_required(VERSION 3.15...3.28)
 
@@ -19,6 +19,8 @@ else()
   set(DEV_MODULE Development.Module)
 endif()
 find_package(Python 3.8 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
+
+find_package(OpenMP QUIET)
 
 # Perform an optimized release build by default unless another build type is specified:
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -38,7 +40,6 @@ nanobind_add_module(roms_forcing_utils
    src/roms_forcing_utils.cpp 
    src/river_forcing.cpp
    src/seaice.cpp
-   src/extrapolate_land.cpp
    src/nanobind.cpp)
 
 # The following paths are from module netcdf/4.7.4:
@@ -50,3 +51,7 @@ target_include_directories(roms_forcing_utils PRIVATE ${NETCDF_INC_PATH})
 target_include_directories(roms_forcing_utils PRIVATE nanoflann/include)
 target_link_directories(roms_forcing_utils PRIVATE ${NETCDF_LIB_PATH})
 target_link_libraries(roms_forcing_utils PRIVATE netcdf_c++4 netcdf)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(roms_forcing_utils PRIVATE OpenMP::OpenMP_CXX)
+endif()

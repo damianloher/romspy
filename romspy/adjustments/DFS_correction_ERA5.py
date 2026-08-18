@@ -2,7 +2,7 @@ import netCDF4
 import cdo
 import os
 import numpy as np
-from romspy import UP_data_paths
+from romspy import Global_settings
 
 """
 Implements the Drakkar correction based on the Romstools code.
@@ -32,8 +32,8 @@ def regrid_dfs_to_romsgrid(grd_file,out_dir,cdo_options,**kwargs):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     # Shortwave correction factors:
-    file_sw = UP_data_paths.DFS_data_dir + 'SW_dfs_factor.nc'
-    file_lw = UP_data_paths.DFS_data_dir + 'LW_dfs_factor.nc'
+    file_sw = Global_settings.DFS_data_dir + 'SW_dfs_factor.nc'
+    file_lw = Global_settings.DFS_data_dir + 'LW_dfs_factor.nc'
     lcdo = cdo.Cdo(debug=verbose)
     outfiles = []
     outfile = lcdo.remapbil(grd_file, input=file_lw, options=cdo_options)
@@ -145,7 +145,7 @@ def interpolate_clim_dfs_factors_to_daily(output_dir,infile,**kwargs):
 
 
 def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
-                             timavg,cdo_options,**kwargs):
+                             era_nr_trecs_day,timavg,cdo_options,**kwargs):
     """
     Creates the ERA radiation data file for a specified year and month
     :param era_path: path to ERA data files
@@ -153,8 +153,11 @@ def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
     :param out_dir: output folder
     :param year: year for which to create the data
     :param month: month for which to create the data
-    :param timavg: time resolution. If the ERA5 input files are hourly, timavg determines
-       the time resolution of the output data in hours.
+    :param era_nr_tsteps_day: number of time records per day in ERA data
+    :param timavg [integer]: time resolution of output data. Time averages are computed over blocks of timavg time records
+       of the ERA data. E.g. if the ERA5 input files are hourly, the timavg determines
+       the time resolution of the output data in hours. If the ERA5 input files are days, timavg determines
+       the time resolution of the output data in days.
     :param cdo_options: string of options passed to cdo
     Can have any of the following optional arguments:
         verbose - whether to print runtime information - default false
@@ -210,19 +213,29 @@ def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
             vobj_out_time = nc_out.variables['sthr_time']
             infile = f'{era_path}/{year}/ERA5_{year}_{month:02}.nc'
             if not os.path.exists(infile):
-                infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_daily.nc'
+                infile = f'{era_path}/for_romstools/{year}/ERA5_{year}_{month:02}.nc'
                 if not os.path.exists(infile):
-                    msg = 'no ERA5 data found for variable "str" (surface net thermal radiation)'
-                    raise ValueError(msg)
+                    infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_daily.nc'
+                    if not os.path.exists(infile):
+                        msg = 'no ERA5 data found for variable "str" (surface net thermal radiation)'
+                        raise ValueError(msg)
         else:
             vobj_out = nc_out.variables['dlwrad']
             vobj_out_time = nc_out.variables['dlw_time']
             infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_strd.nc'
             if not os.path.exists(infile):
-                infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_strd_daily.nc'
+                infile = f'{era_path}/for_romstools/{year}/ERA5_{year}_{month:02}_strd.nc'
                 if not os.path.exists(infile):
-                    msg = 'no ERA5 data found for variable "strd" (surface longwave downward radiation)'
-                    raise ValueError(msg)
+                    infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_strd_daily.nc'
+                    if not os.path.exists(infile):
+                        infile = f'{era_path}/{year}/ERA5_{year}_{month:02}.nc'
+                        if not os.path.exists(infile):
+                            infile = f'{era_path}/for_romstools/{year}/ERA5_{year}_{month:02}.nc'
+                            if not os.path.exists(infile):
+                                infile = f'{era_path}/{year}/ERA5_{year}_{month:02}_daily.nc'
+                                if not os.path.exists(infile):
+                                    msg = 'no ERA5 data found for variable "strd" (surface longwave downward radiation)'
+                                    raise ValueError(msg)
         outfile = lcdo.remap(grd_file + ',' + weight_file, input=(f' -selname,{var}' + ' ' + infile),
                     options=cdo_options)
         # Scale variable in outfile:
@@ -231,16 +244,19 @@ def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
         #tmp = nc_in.variables[var][:]
         vobj_in = nc_in.variables[var]
         vobj_in_time = nc_in.variables[vobj_in.dimensions[0]]
+        # Conversion factor to convert to time averages [sec^-1]:
+        stimei = era_nr_trecs_day/(24*3600.0)
         if vobj_in_time.units[:5] == 'hours':
             #vobj_out_time[:] = vobj_in_time[:]/24.0
-            tscale = 24.0
-            vobj_out_time.units = 'days since ' + ' '.join(vobj_in_time.units.split(' ')[-2:])
-            stimei = 1/3600.0   # conversion factor to convert to time averages
+            tscale = 24.0  # scaling factor to convert time values to days
+            vobj_out_time.units = 'days since ' + vobj_in_time.units.split(' ')[-1]
         elif vobj_in_time.units[:4] == 'days':
             #vobj_out_time[:] = vobj_in_time[:]
             tscale = 1.0
             vobj_out_time.units = vobj_in_time.units
-            stimei = 1/(24*3600.0)
+        elif vobj_in_time.units.startswith("seconds"):
+            tscale = 86400.0
+            vobj_out_time.units = 'days since ' + vobj_in_time.units.split(' ')[-1]
         else:
             msg = f'time unit of variable "{vobj_in_time.name}" not supported: {vobj_in_time.units}'
             raise ValueError(msg)
@@ -249,8 +265,7 @@ def create_era_frc_radiation(era_path,grd_file,weight_file,out_dir,year,month,
         t2 = timavg
         tidx = 0
         while t2 <= nt:
-            #if verbose:
-            #    print(f'   var = {var}, t1 = {t1}, t2 = {t2}')
+            # Convert time values to days:
             vobj_out_time[tidx] = np.mean(vobj_in_time[t1:t2])/tscale
             vobj_out[tidx,:] = stimei*np.mean(nc_in.variables[var][t1:t2,:], axis=0)
             t1 = t2

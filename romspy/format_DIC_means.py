@@ -3,11 +3,12 @@
 import calendar
 import netCDF4
 import numpy as np
+import romspy.Global_settings as Global_settings
 
-ROMSPY_INPUT = "/net/sea/work/datasets/gridded/ocean/3d/model/romspy_input/"
+ROMSPY_INPUT = Global_settings.Ocean_3d_input
 MASK_FILE = ROMSPY_INPUT + '/GCB_RunB_2024_gfort.pop.h.0001.nc'
 # File containing the DIC data to be masked:
-DIC_FILE = ROMSPY_INPUT + 'CESM_DIC_ann_1751-2023_1x1.nc'
+DIC_FILE = ROMSPY_INPUT + '/CESM_DIC_ann_1751-2023_1x1.nc'
 
 # Read mask for Baltic, Black, Caspian and Red Sea (on POP grid):
 nc = netCDF4.Dataset(MASK_FILE,'r')
