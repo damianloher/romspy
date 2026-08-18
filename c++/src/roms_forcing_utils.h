@@ -2,15 +2,10 @@
 #include <vector>
 #include <cmath>
 #include <boost/multi_array.hpp>
-//#include <nanobind/nanobind.h>
-//#include <nanobind/ndarray.h>
 
 #pragma once
 
 using namespace netCDF;
-//namespace nb = nanobind;
-
-//using InArray = nb::ndarray<const double, nb::ndim<1>, nb::c_contig, nb::device::cpu>;
 
 class ROMS_forcing {
 public:
