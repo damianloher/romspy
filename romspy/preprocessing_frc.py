@@ -255,7 +255,14 @@ class PreProcessorFrc:
                 for in_file, file_index in zip(group['files'], fidx_iter):
                     # Get the unique filename for each file
                     out_file = '{}_{}_{:03}.nc'.format(self.outfile[:-3],group_index,file_index)
-                    # Continue if output file exists already:
+                    # Get year of in_file and check if the final output file of this year is
+                    # available already:
+                    in_file_year = in_file[-10:-6]
+                    frc_file_final = f"{self.outfile[:-3]}_{in_file_year}.nc"
+                    # Continue with next iteration if output file for this year exists already:
+                    if os.path.exists(frc_file_final):
+                        continue
+                    # Continue with next iteration if output file for this month exists already:
                     #print("infile = "+in_file)
                     if os.path.exists(out_file):
                         continue
@@ -286,7 +293,14 @@ class PreProcessorFrc:
                         out_file = '{}_{}_{}_{:03}.nc'.format(self.outfile[:-3],x['out'],
                                                               group_index,file_index)
                         outfiles.append(out_file)
-                        # Continue if output file exists already:
+                        # Get year of in_file and check if the final output file of this year is
+                        # available already:
+                        in_file_year = in_file[-10:-6]
+                        frc_file_final = f"{self.outfile[:-3]}_{in_file_year}.nc"
+                        # Continue with next iteration if output file for this year exists already:
+                        if os.path.exists(frc_file_final):
+                            continue
+                        # Continue with next iteration if output file for this month exists already:
                         if os.path.exists(out_file):
                             continue
                         #out_file = self.outfile[:-3] + '_' + x['out'] + '_' + \
