@@ -86,11 +86,14 @@ def __interpolate_nc(cdo, file: str, weight: list, target: str, variables: list,
         file_out = f"{outdir}/{os.path.basename(file)}"
         if not os.path.exists(file_out):
             print(f"   copy {file} --> {file_out}")
+            sys.stdout.flush()
             var_list = ",".join(varlist1)
             #cmd = f"{Global_settings.ncks} -v {var_list} {file} {file_out}"
+            # Copy and convert ERA file to single precision:
+            subprocess.run([Global_settings.cdo, "-b", "F32", f"select,name={var_list}", file, f"{outdir}/era_tmp.nc"], check=True)
             # Check if the ERA file contains scale_factor or add_offset attributes in the
             # variables we are interested in:
-            nc = netCDF4.Dataset(file,'r')
+            nc = netCDF4.Dataset(f"{outdir}/era_tmp.nc",'r')
             scale_att_found = False
             for var in varlist1:
                 vobj = nc.variables[var]
@@ -100,7 +103,8 @@ def __interpolate_nc(cdo, file: str, weight: list, target: str, variables: list,
             if scale_att_found:
                 # Unpack data to get rid of scale_factor and add_offset attributes:
                 print('   unpack data using ncpdq')
-                subprocess.run([Global_settings.nccopy, "-k", "4", "-v", var_list, file, f"{outdir}/era_tmp.nc"], check=True)
+                sys.stdout.flush()
+                #subprocess.run([Global_settings.nccopy, "-k", "4", "-v", var_list, f"{outdir}/era_tmp1.nc", f"{outdir}/era_tmp2.nc"], check=True)
                 subprocess.run([Global_settings.ncpdq, "--unpack", f"{outdir}/era_tmp.nc", file_out], check=True)
                 subprocess.run(["/usr/bin/rm", "-f", f"{outdir}/era_tmp.nc"], check=True)
                 # Make sure missing_value attributes are correct: ncpdq has adapted the _FillValue
@@ -112,40 +116,36 @@ def __interpolate_nc(cdo, file: str, weight: list, target: str, variables: list,
                         vobj.missing_value = getattr(vobj, "_FillValue")
                 nc.close()
             else:
-                subprocess.run([Global_settings.ncks, "-v", var_list, file, file_out], check=True)
+                subprocess.run(["/usr/bin/mv",f"{outdir}/era_tmp.nc", file_out], check=True)
         nc = netCDF4.Dataset(file_out,'a')
         #nt = len(nc.dimensions["time"])
         # Check for _FillValue and missing_value attributes which are not NaN:
         vlist_fillval = []
         for v in varlist1:
             vobj = nc.variables[v]
-            if hasattr(vobj,'missing_value'):
-                data = vobj[:]
-                data[data==vobj.missing_value] = np.float32(np.nan)
-                vobj[:] = data
-                vobj.missing_value = np.float32(np.nan)
-                if hasattr(vobj,'_FillValue'):
-                    fillval = getattr(vobj,"_FillValue")
-                    if not np.isnan(fillval):
-                        vlist_fillval.append(v)
-                        print(f"   set missing values of {v} to NaN")
-                        sys.stdout.flush()
-                        data[data==fillval] = np.float32(np.nan)
-                        vobj[:] = data
+            if hasattr(vobj,'_FillValue'):
+                fillval = getattr(vobj,"_FillValue")
+                if not np.isnan(fillval):
+                    vlist_fillval.append(v)
         if len(vlist_fillval) > 0:
-            print("   set _FillValue attributes to NaN")
+            print("   set missing values to NaN")
             sys.stdout.flush()
             nc.close()
-            # Adapt _FillValue atrributes to match missin_value:
+            # Replace missing values by NaN and adapt _FillValue atrributes:
             cmd_ncap2 = ""
             for v in vlist_fillval:
-                cmd_ncap2 += f"{v}={v}; {v}.change_miss(nan);"
+                cmd_ncap2 += f"{v}={v}; {v}.change_miss(nanf);"
             tmp_file = f"{outdir}/{str(uuid.uuid4())}"
             subprocess.run([Global_settings.ncap2, "-s", cmd_ncap2,file_out,tmp_file], check=True)
             subprocess.run(["/usr/bin/mv",tmp_file,file_out], check=True)
             # Reopen Netcdf file:
             nc = netCDF4.Dataset(file_out,'a')
-        print(f"apply land-sea mask from {lsm_file}")
+            # Adapt missing_value attributes:
+            for v in varlist1:
+                vobj = nc.variables[v]
+                if hasattr(vobj,'missing_value'):
+                    vobj.missing_value = np.float32(np.nan)
+        print(f"   apply land-sea mask from {lsm_file}")
         for v in varlist1:
             print(f"   apply ERA lsm to {v}")
             sys.stdout.flush()
