@@ -570,7 +570,7 @@ def era5_time_axes_adjustment(
 
         # Write time variables:
         for tax in taxes:
-            vobj = nc_out.createVariable(tax, "f4", (tax,))
+            vobj = nc_out.createVariable(tax, "f8", (tax,))
             vobj.long_name = tax
             vobj.climatological = "means"
 
